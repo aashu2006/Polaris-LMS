@@ -1,15 +1,17 @@
 import React, { useState } from 'react';
-import { UserPlus, BookOpen, Upload, Plus, Info, X } from 'lucide-react';
+import { UserPlus, BookOpen, Upload, Plus, Info, X, Users } from 'lucide-react';
 
 interface QuickActionsProps {
   onInviteMentor: () => void;
   onCreateProgram: () => void;
+  onCreateGroup: ()=> void;
   onBulkUpload: () => void;
 }
 
 const QuickActions: React.FC<QuickActionsProps> = ({
   onInviteMentor,
   onCreateProgram,
+  onCreateGroup,
   onBulkUpload
 }) => {
   const [showCsvInfo, setShowCsvInfo] = useState(false);
@@ -27,6 +29,13 @@ const QuickActions: React.FC<QuickActionsProps> = ({
       description: 'Set up a new learning program',
       icon: BookOpen,
       onClick: onCreateProgram,
+      color: 'bg-gray-700 hover:bg-gray-600'
+    },
+    {
+      title: 'Create Group',
+      description: 'Set up a new learning group',
+      icon: Users,
+      onClick: onCreateGroup,
       color: 'bg-gray-700 hover:bg-gray-600'
     },
     {
@@ -48,7 +57,7 @@ const QuickActions: React.FC<QuickActionsProps> = ({
         </button>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8">
         {actions.map((action, index) => (
           <div key={index} className="relative">
             <button
