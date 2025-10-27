@@ -493,7 +493,7 @@ const StudentDashboard: React.FC = () => {
         </div>
 
         {/* Pagination Controls */}
-        {totalPages > 1 && (
+        {filteredStudents.length > 1 && (
           <div className="px-6 py-4 border-t border-gray-800 bg-gray-900">
             <div className="flex items-center justify-between">
               <div className="text-sm text-gray-400">
