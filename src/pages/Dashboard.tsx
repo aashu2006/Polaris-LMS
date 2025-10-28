@@ -10,25 +10,30 @@ import StudentDashboard from '../components/StudentDashboard';
 import CustomReports from '../components/CustomReports';
 import AlertsPanel from '../components/AlertsPanel';
 import ProgramTable from '../components/ProgramTable';
+import GroupTable from '../components/GroupTable';
 import StudentTable from '../components/StudentTable';
 import MentorTable from '../components/MentorTable';
 import QuickActions from '../components/QuickActions';
 import ProgramModal from '../components/ProgramModal';
 import StudentModal from '../components/StudentModal';
 import MentorModal from '../components/MentorModal';
-import type { Program, Student, Mentor } from '../types';
+import type { Program, Student, Mentor, Group } from '../types';
+import GroupModal from '../components/GroupModel';
 
 const Dashboard: React.FC = () => {
   const { user } = useAuth();
   const api = useApi();
-  const [currentView, setCurrentView] = useState<'dashboard' | 'programs' | 'students' | 'mentors' | 'reports' | 'alerts'>('dashboard');
+  const [currentView, setCurrentView] = useState<'dashboard' | 'programs' | 'groups' | 'students' | 'mentors' | 'reports' | 'alerts'>('dashboard');
   const [selectedProgram, setSelectedProgram] = useState<Program | null>(null);
+  const [selectedGroup, setSelectedGroup] = useState<Group | null>(null);
   const [selectedStudent, setSelectedStudent] = useState<Student | null>(null);
   const [selectedMentor, setSelectedMentor] = useState<Mentor | null>(null);
   const [modalMode, setModalMode] = useState<'view' | 'edit'>('view');
   const [studentModalMode, setStudentModalMode] = useState<'view' | 'edit' | 'add'>('view');
   const [mentorModalMode, setMentorModalMode] = useState<'view' | 'edit' | 'add'>('view');
   const [showProgramModal, setShowProgramModal] = useState(false);
+  const [showGroupModal, setShowGroupModal] = useState(false);
+  const [groupModalMode, setGroupModalMode] = useState<'view' | 'edit'>('view');
   const [showStudentModal, setShowStudentModal] = useState(false);
   const [showMentorModal, setShowMentorModal] = useState(false);
   const [showRevokeConfirm, setShowRevokeConfirm] = useState(false);
@@ -49,6 +54,20 @@ const Dashboard: React.FC = () => {
   const handleCloseProgramModal = () => {
     setShowProgramModal(false);
     setSelectedProgram(null);
+  };
+  const handleViewGroup = (group: Group) => {
+    setSelectedGroup(group);
+    setGroupModalMode('view');
+    setShowGroupModal(true);
+  };
+  const handleEditGroup = (group: Group) => {
+    setSelectedGroup(group);
+    setGroupModalMode('edit');
+    setShowGroupModal(true);
+  };  
+  const handleCloseGroupModal = () => {
+    setShowGroupModal(false);
+    setSelectedGroup(null);
   };
 
   const handleViewStudent = (student: Student) => {
@@ -125,6 +144,12 @@ const Dashboard: React.FC = () => {
     setSelectedProgram(null);
     setModalMode('edit');
     setShowProgramModal(true);
+  };
+
+  const handleCreateGroup = () => {
+    setSelectedGroup(null);
+    setGroupModalMode('edit');
+    setShowGroupModal(true);
   };
 
   const handleBulkUpload = () => {
@@ -235,6 +260,16 @@ const Dashboard: React.FC = () => {
               Programs
             </button>
             <button
+              onClick={() => setCurrentView('groups')}
+              className={`px-6 py-3 rounded-xl font-semibold transition-all duration-200 ${
+                currentView === 'groups'
+                  ? 'bg-yellow-500 text-black shadow-lg shadow-yellow-500/25'
+                  : 'text-gray-300 hover:text-white hover:bg-gray-800/50'
+              }`}
+            >
+              Groups
+            </button>
+            <button
               onClick={() => setCurrentView('students')}
               className={`px-6 py-3 rounded-xl font-semibold transition-all duration-200 ${
                 currentView === 'students'
@@ -283,6 +318,7 @@ const Dashboard: React.FC = () => {
             <QuickActions
               onInviteMentor={handleInviteMentor}
               onCreateProgram={handleCreateProgram}
+              onCreateGroup={handleCreateGroup}
               onBulkUpload={handleBulkUpload}
             />
             <div className="grid grid-cols-1 xl:grid-cols-3 gap-8">
@@ -299,6 +335,13 @@ const Dashboard: React.FC = () => {
             <ProgramTable
               onViewProgram={handleViewProgram}
               onEditProgram={handleEditProgram}
+            />
+          </div>
+        ) : currentView === 'groups' ? (
+          <div className="mb-12">
+            <GroupTable
+              onViewGroup={handleViewGroup}
+              onEditGroup={handleEditGroup}
             />
           </div>
         ) : currentView === 'students' ? (
@@ -335,6 +378,13 @@ const Dashboard: React.FC = () => {
         onClose={handleCloseProgramModal}
         program={selectedProgram}
         mode={modalMode}
+      />
+
+      <GroupModal
+        isOpen={showGroupModal}
+        onClose={handleCloseGroupModal}
+        group={selectedGroup}
+        mode={groupModalMode}
       />
 
       <StudentModal

@@ -573,6 +573,31 @@ const lmsApi = {
     },
   },
 
+  // Admin Groups endpoints
+  adminGroups: {
+    getGroupStats: async (token: string) => {
+      return lmsApiRequest(`${LMS_BASE_URL}/api/v1/admin/groups/stats`, {
+        method: 'GET',
+      }, token);
+    },
+
+    createGroup: async (groupData: any, token: string) => {
+      return lmsApiRequest(`${LMS_BASE_URL}/api/v1/admin/groups/create`, {
+        method: 'POST',
+        body: JSON.stringify(groupData),
+        headers: { 'Content-Type': 'application/json' },
+      }, token);
+    },
+
+    editGroup: async (groupId: string, groupData: any, token: string) => {
+      return lmsApiRequest(`${LMS_BASE_URL}/api/v1/admin/groups/editGroup/${groupId}`, {
+        method: 'POST',
+        body: JSON.stringify(groupData),
+        headers: { 'Content-Type': 'application/json' },
+      }, token);
+    },
+  },
+
   // Admin Students data endpoints
   adminStudents: {
     bulkUploadStudents: async (formData: FormData, token: string) => {
@@ -842,6 +867,11 @@ export const useApi = () => {
         getAllFaculties: () => lmsApi.adminPrograms.getAllFaculties(token),
         editProgram: (programId: string, programData: any) => lmsApi.adminPrograms.editProgram(programId, programData, token),
       },
+      adminGroups: {
+        getGroupStats: () => lmsApi.adminGroups.getGroupStats(token),
+        createGroup: (groupData: any) => lmsApi.adminGroups.createGroup(groupData, token),
+        editGroup: (groupId: string, groupData: any) => lmsApi.adminGroups.editGroup(groupId, groupData, token),
+      },   
       adminStudents: {
         bulkUploadStudents: (formData: FormData) => lmsApi.adminStudents.bulkUploadStudents(formData, token),
         getWeeklyAttendanceStats: () => lmsApi.adminStudents.getWeeklyAttendanceStats(token),

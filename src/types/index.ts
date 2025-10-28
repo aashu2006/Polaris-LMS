@@ -18,6 +18,12 @@ export interface Program {
   } | null;
 }
 
+
+export interface Group {
+  id: string;
+  name: string;
+}
+
 export interface Mentor {
   id: string;
   name: string;
