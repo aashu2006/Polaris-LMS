@@ -24,36 +24,30 @@ const GroupTable: React.FC<GroupTableProps> = ({ onViewGroup, onEditGroup }) => 
         setLoading(true);
         setError(null);
 
-        // NOTE: No dedicated Groups endpoint yet; derive mock groups from program stats for UI parity
         const programsData = await api.lms.adminPrograms.getProgramStats();
         const derivedGroups: Group[] = (programsData.data || []).map((p: any, index: number) => ({
-          id: `grp-${p.program_id || index}-${p.cohort || 'NA'}-${index}`,
+          id: `grp-${p.program_id || index}`,
           name: `${p.program_name || 'Learning Group'} ${index + 1}`,
-          description: p.cohort ? `Cohort ${p.cohort}` : 'General Group',
-          memberCount: p.mentors_count || p.sessions_count || 0,
-          status: (p.status === 'Active' ? 'active' : 'inactive') as Group['status'],
-          startDate: p.start_date || 'N/A',
-          endDate: p.end_date || 'N/A',
-          assignedMentor: null,
-        }));
+        }))
+        .filter((g: Group) => g.name); // Filter out any entries without a name
 
-        // Fallback if API returns empty
         if (!derivedGroups.length) {
           setGroups([
-            { id: 'g1', name: 'Alpha Group', description: 'Cohort 2024-A', memberCount: 24, status: 'active', startDate: '2024-01-10', endDate: '2024-06-10', assignedMentor: null },
-            { id: 'g2', name: 'Beta Group', description: 'Cohort 2024-B', memberCount: 18, status: 'inactive', startDate: '2024-02-01', endDate: '2024-07-01', assignedMentor: null },
-            { id: 'g3', name: 'Gamma Group', description: 'Cohort 2024-C', memberCount: 30, status: 'completed', startDate: '2024-01-01', endDate: '2024-04-30', assignedMentor: null },
-          ]);
+            { id: 'g1', name: 'Alpha Group' },
+            { id: 'g2', name: 'Beta Group' },
+            { id: 'g3', name: 'Gamma Group' },
+          ] as Group[]); // Explicitly cast to meet the minimal Group interface
         } else {
           setGroups(derivedGroups);
         }
       } catch (err: any) {
         setError(err.message || 'Failed to load groups');
+        // Fallback mock data on error
         setGroups([
-          { id: 'g1', name: 'Alpha Group', description: 'Cohort 2024-A', memberCount: 24, status: 'active', startDate: '2024-01-10', endDate: '2024-06-10', assignedMentor: null },
-          { id: 'g2', name: 'Beta Group', description: 'Cohort 2024-B', memberCount: 18, status: 'inactive', startDate: '2024-02-01', endDate: '2024-07-01', assignedMentor: null },
-          { id: 'g3', name: 'Gamma Group', description: 'Cohort 2024-C', memberCount: 30, status: 'completed', startDate: '2024-01-01', endDate: '2024-04-30', assignedMentor: null },
-        ]);
+          { id: 'g1', name: 'Alpha Group' },
+          { id: 'g2', name: 'Beta Group' },
+          { id: 'g3', name: 'Gamma Group' },
+        ] as Group[]);
       } finally {
         setLoading(false);
       }
@@ -73,8 +67,7 @@ const GroupTable: React.FC<GroupTableProps> = ({ onViewGroup, onEditGroup }) => 
 
   const filteredGroups = groups
     .filter(group =>
-      group.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      (group.description || '').toLowerCase().includes(searchTerm.toLowerCase())
+      group.name.toLowerCase().includes(searchTerm.toLowerCase()) 
     )
     .sort((a, b) => {
       const aVal = a[sortField] as any;
@@ -86,15 +79,7 @@ const GroupTable: React.FC<GroupTableProps> = ({ onViewGroup, onEditGroup }) => 
       }
     });
 
-  const getStatusColor = (status: Group['status']) => {
-    switch (status) {
-      case 'active': return 'text-green-400 bg-green-400/10';
-      case 'inactive': return 'text-gray-400 bg-gray-400/10';
-      case 'completed': return 'text-yellow-400 bg-yellow-400/10';
-      default: return 'text-gray-400 bg-gray-400/10';
-    }
-  };
-
+  
   if (loading) {
     return (
       <div className="bg-gray-900 rounded-lg border border-gray-800 overflow-hidden">
@@ -146,13 +131,14 @@ const GroupTable: React.FC<GroupTableProps> = ({ onViewGroup, onEditGroup }) => 
                 className="bg-gray-800 text-white pl-10 pr-4 py-2 rounded-lg border border-gray-700 focus:border-yellow-500 focus:outline-none w-64"
               />
             </div>
-            {/* Filter */}
-            <button
+            {/* Filter - Hiding as there are no status/date fields to filter by */}
+            {/* <button
               onClick={() => setShowFilters(!showFilters)}
               className="p-2 text-gray-400 hover:text-yellow-500 transition-colors"
             >
               <Filter className="w-5 h-5" />
             </button>
+            */}
           </div>
         </div>
       </div>
@@ -162,30 +148,18 @@ const GroupTable: React.FC<GroupTableProps> = ({ onViewGroup, onEditGroup }) => 
         <table className="w-full">
           <thead className="bg-gray-800">
             <tr>
+              {/* Group Name Column */}
               <th className="px-6 py-3 text-left">
                 <button
                   onClick={() => handleSort('name')}
                   className="flex items-center space-x-1 text-gray-300 hover:text-white transition-colors"
                 >
-                  <span className="text-xs font-medium uppercase tracking-wider">Group</span>
+                  <span className="text-xs font-medium uppercase tracking-wider">Group Name</span>
                   <ArrowUpDown className="w-4 h-4" />
                 </button>
               </th>
-              <th className="px-6 py-3 text-left">
-                <button
-                  onClick={() => handleSort('description')}
-                  className="flex items-center space-x-1 text-gray-300 hover:text-white transition-colors"
-                >
-                  <span className="text-xs font-medium uppercase tracking-wider">Description</span>
-                  <ArrowUpDown className="w-4 h-4" />
-                </button>
-              </th>
-              <th className="px-6 py-3 text-left">
-                <span className="text-xs font-medium uppercase tracking-wider text-gray-300">Members</span>
-              </th>
-              <th className="px-6 py-3 text-left">
-                <span className="text-xs font-medium uppercase tracking-wider text-gray-300">Status</span>
-              </th>
+              
+              {/* Action Column */}
               <th className="px-6 py-3 text-right">
                 <span className="text-xs font-medium uppercase tracking-wider text-gray-300">Actions</span>
               </th>
@@ -198,20 +172,12 @@ const GroupTable: React.FC<GroupTableProps> = ({ onViewGroup, onEditGroup }) => 
                 className="hover:bg-gray-800/50 transition-colors cursor-pointer group"
                 onClick={() => onViewGroup(group)}
               >
+                {/* Group Name Data */}
                 <td className="px-6 py-4">
                   <div className="text-white font-medium group-hover:text-yellow-400 transition-colors">{group.name}</div>
                 </td>
-                <td className="px-6 py-4">
-                  <div className="text-gray-300">{group.description}</div>
-                </td>
-                <td className="px-6 py-4">
-                  <div className="text-gray-300">{group.memberCount}</div>
-                </td>
-                <td className="px-6 py-4">
-                  <span className={`inline-flex px-2 py-1 text-xs font-medium rounded-full ${getStatusColor(group.status)}`}>
-                    {group.status.charAt(0).toUpperCase() + group.status.slice(1)}
-                  </span>
-                </td>
+                
+                {/* Actions Data */}
                 <td className="px-6 py-4 text-right">
                   <div className="flex items-center justify-end space-x-2">
                     <button
@@ -250,5 +216,3 @@ const GroupTable: React.FC<GroupTableProps> = ({ onViewGroup, onEditGroup }) => 
 };
 
 export default GroupTable;
-
-
