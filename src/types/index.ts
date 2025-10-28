@@ -18,6 +18,18 @@ export interface Program {
   } | null;
 }
 
+
+export interface Group {
+  id: string;
+  name: string;
+  description: string; // New field for group
+  memberCount: number; // Used instead of 'sessions'
+  status: 'active' | 'inactive' | 'completed';
+  startDate: string;
+  endDate: string;
+  assignedMentor: { id: string; name: string } | null;
+}
+
 export interface Mentor {
   id: string;
   name: string;
