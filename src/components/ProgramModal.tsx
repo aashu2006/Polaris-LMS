@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import { X, Users, BookOpen, Calendar, Clock, AlertTriangle, Filter, ArrowUpDown, Loader2 } from 'lucide-react';
 import type { Program } from '../types';
 import { useApi } from '../services/api';
@@ -11,119 +11,43 @@ interface ProgramModalProps {
 }
 
 const ProgramModal: React.FC<ProgramModalProps> = ({ isOpen, onClose, program, mode }) => {
-  
-  const [editData, setEditData] = useState<Partial<Program>>({
-  id: '',
-  name: '',
-  cohort: '',
-  sessions: 0,
-  status: 'active',
-  startDate: '',
-  endDate: '',
-  assignedMentor: null
-});
-
-useEffect(() => {
-  if (program) {
-    setEditData(program);
-  } else {
-    setEditData({
-      id: '',
-      name: '',
-      cohort: '',
-      sessions: 0,
-      status: 'active',
-      startDate: '',
-      endDate: '',
-      assignedMentor: null
-    });
-  }
-}, [program, isOpen]);
-
-  const [showMentorDropdown, setShowMentorDropdown] = useState(false);
-  const [searchTerm, setSearchTerm] = useState('');
-  const [rescheduleFilter, setRescheduleFilter] = useState('all');
-  const [dateRangeFilter, setDateRangeFilter] = useState('all');
-  const [sortBy, setSortBy] = useState<'date' | 'mentor' | 'reschedules'>('date');
-  const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
-  const [reschedules, setReschedules] = useState<any[]>([]);
-  const [loadingReschedules, setLoadingReschedules] = useState(false);
-  const [batches, setBatches] = useState<Array<{ id: number, batch_name: string, academic_year: string, semester: number }>>([]);
-  const [faculties, setFaculties] = useState<Array<{
-    user_id: string;
-    profiles: { name: string };
-    expertise: string[] | null;
-    date_of_joining: string | null;
-    is_active: boolean;
-  }>>([]);
-  const [selectedBatchId, setSelectedBatchId] = useState<number>(1);
-  const [selectedFacultyId, setSelectedFacultyId] = useState<string>('');
-  const [loading, setLoading] = useState(false);
   const api = useApi();
-  // Fetch reschedule data when modal opens and program is selected
-  useEffect(() => {
-    if (isOpen && program && mode === 'view') {
-      const fetchReschedules = async () => {
-        try {
-          setLoadingReschedules(true);
-          const courseId = parseInt(program.id);
-          if (!isNaN(courseId)) {
-            const rescheduleData = await api.ums.programs.getReschedules(courseId);
-            setReschedules(rescheduleData.data || []);
-          }
-        } catch (error) {
-          setReschedules([]);
-        } finally {
-          setLoadingReschedules(false);
-        }
-      };
 
-      fetchReschedules();
-    }
-  }, [isOpen, program, mode, api.ums.programs]);
+  // --- State ---
+  const [editData, setEditData] = useState<Partial<Program>>({
+    id: '',
+    name: '',
+    cohort: '',
+    sessions: 0,
+    status: 'active',
+    startDate: '',
+    endDate: '',
+    assignedMentor: null
+  });
 
-  // Fetch batches and faculties when creating a new program
-  useEffect(() => {
-    if (isOpen && mode === 'edit' && !program) {
-      const fetchData = async () => {
-        try {
-          setLoading(true);
-          const [batchesResponse, facultiesResponse] = await Promise.all([
-            api.lms.adminMentors.getAllBatches(),
-            api.lms.adminPrograms.getAllFaculties()
-          ]);
+    const [showMentorDropdown, setShowMentorDropdown] = useState(false);
+    const [searchTerm, setSearchTerm] = useState('');
+    const [rescheduleFilter, setRescheduleFilter] = useState('all');
+    const [dateRangeFilter, setDateRangeFilter] = useState('all');
+    const [sortBy, setSortBy] = useState<'date' | 'mentor' | 'reschedules'>('date');
+    const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
 
-          if (batchesResponse.batches) {
-            setBatches(batchesResponse.batches);
-            if (batchesResponse.batches.length > 0) {
-              setSelectedBatchId(batchesResponse.batches[0].id);
-            }
-          }
+    const [reschedules, setReschedules] = useState<any[]>([]);
+    const [loadingReschedules, setLoadingReschedules] = useState(false);
+    const [batches, setBatches] = useState<Array<{ id: number; batch_name: string; academic_year: string; semester: number }>>([]);
+    const [faculties, setFaculties] = useState<Array<{
+      user_id: string;
+      profiles: { name: string };
+      expertise: string[] | null;
+      date_of_joining: string | null;
+      is_active: boolean;
+    }>>([]);
+    const [selectedBatchId, setSelectedBatchId] = useState<number>(0); // default 0 (no selection)
+    const [selectedFacultyId, setSelectedFacultyId] = useState<string>('');
+    const [loading, setLoading] = useState<boolean>(false);
+    const [mentorReschedules, setMentorReschedules] = useState<any | null>(null);
+    const [programMentors, setProgramMentors] = useState<any[]>([]);
 
-          if (facultiesResponse.faculties) {
-            setFaculties(facultiesResponse.faculties);
-            if (facultiesResponse.faculties.length > 0) {
-              setSelectedFacultyId(facultiesResponse.faculties[0].user_id);
-            }
-          }
-        } catch (error) {
-        } finally {
-          setLoading(false);
-        }
-      };
-
-      fetchData();
-    }
-  }, [isOpen, mode, program, api.lms.mentors, api.lms.programs]);
-
-  const mockMentors = [
-    { id: '1', name: 'Dr. Sarah Wilson', status: 'available' },
-    { id: '2', name: 'Prof. Michael Chen', status: 'busy' },
-    { id: '3', name: 'Ms. Emily Rodriguez', status: 'available' },
-    { id: '4', name: 'Dr. James Thompson', status: 'offline' }
-  ];
-
-  // Mock reschedule data
   const mockReschedules = [
     {
       id: '1',
@@ -163,22 +87,144 @@ useEffect(() => {
     }
   ];
 
-  const filteredMentors = mockMentors.filter(mentor =>
-    mentor.name.toLowerCase().includes(searchTerm.toLowerCase())
+
+  // --- Fetch batches & faculties when creating a new program ---
+  useEffect(() => {
+    
+    const fetchData = async () => {
+      try {
+        const anyProgram = program as any;
+        const candidate = anyProgram?.course_id ?? anyProgram?.id ?? '';
+        const courseId = parseInt(String(candidate), 10);
+
+        setLoading(true);
+        
+        const [batchesResponse, facultiesResponse, programMentorsResponse] = await Promise.all([
+          api.lms.adminMentors.getAllBatches(),
+          api.lms.adminPrograms.getAllFaculties(),
+          api.lms.adminMentors.getProgramMentors(courseId)
+        ]);
+                
+        setFaculties(facultiesResponse);
+        setProgramMentors(programMentorsResponse?.data || [])
+
+        if (batchesResponse?.batches) {
+          setBatches(batchesResponse.batches);
+          if (batchesResponse.batches.length > 0) {
+            setSelectedBatchId(batchesResponse.batches[0].id);
+          }
+        }
+        
+        if (facultiesResponse?.faculties) {
+          setFaculties(facultiesResponse.faculties);
+          if (facultiesResponse.faculties.length > 0) {
+            setSelectedFacultyId(facultiesResponse.faculties[0].user_id);
+          }
+        } else {
+          console.warn('No faculties found in response:', facultiesResponse);
+        }
+      } catch (err) {
+        console.error('fetchData error', err);
+        // Set empty arrays on error to prevent UI issues
+        setBatches([]);
+        setFaculties([]);
+      } finally {
+        setLoading(false);
+      }
+    };
+    
+    fetchData();
+  }, [isOpen, mode, program, api]);
+  
+  const filteredMentors = faculties.filter(mentor =>
+    mentor.profiles.name.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
-  // Transform real reschedule data to match the expected format
-  const transformedReschedules = reschedules.map((reschedule: any) => ({
-    id: reschedule.id.toString(),
-    mentorName: reschedule.profiles?.name || 'Unknown Mentor',
-    sessionId: `SES-${reschedule.id}`,
-    sessionTitle: 'Class Session',
-    originalDateTime: reschedule.session_datetime,
-    rescheduledDateTime: reschedule.rescheduled_date_time,
-    rescheduleCount: reschedule.rescheduled_count || 1
-  }));
+  useEffect(() => {
+    if (!program) {
+      setEditData({
+        id: '',
+        name: '',
+        cohort: '',
+        sessions: 0,
+        status: 'active',
+        startDate: '',
+        endDate: '',
+        assignedMentor: null
+      });
+      return;
+    }
 
-  // Filter and sort reschedules
+    const anyProgram = program as any;
+    const apiItem = Array.isArray(anyProgram) ? anyProgram[0] : anyProgram;
+
+    const mapped = {
+      id: (apiItem?.course_id?.toString?.() || apiItem?.id?.toString?.() || '') as string,
+      name: apiItem?.course_name ?? apiItem?.name ?? '',
+      cohort: apiItem?.batch_name ?? apiItem?.cohort ?? '',
+      sessions: typeof apiItem?.sessions === 'number' ? apiItem.sessions : parseInt(apiItem?.sessions ?? '0', 10) || 0,
+      status: typeof apiItem?.active === 'boolean'
+        ? (apiItem.active ? 'active' : 'inactive')
+        : (apiItem?.active ?? apiItem?.status ?? 'active'),
+      startDate: apiItem?.start_date ?? apiItem?.startDate ?? '',
+      endDate: apiItem?.end_date ?? apiItem?.endDate ?? '',
+      assignedMentor: apiItem?.faculty_name ? { id: apiItem?.faculty_id?.toString?.() || '', name: apiItem.faculty_name } : (apiItem?.assignedMentor ?? null)
+    };
+
+    setEditData(mapped);
+    
+  }, [program, isOpen]);
+
+  useEffect(() => {
+
+    const fetchReschedules = async () => {
+      try {
+        setLoadingReschedules(true);
+
+        const anyProgram = program as any;
+        const candidate = anyProgram?.course_id ?? anyProgram?.id ?? '';
+        const courseId = parseInt(String(candidate), 10);
+
+        if (Number.isNaN(courseId)) {
+          console.warn('Program id/course_id is not numeric; skipping reschedule fetch:', candidate);
+          setReschedules([]);
+          return;
+        }
+
+        const [rescheduleData, mentorSummary] = await Promise.all([
+          api.ums.programs.getProgramDetails(courseId),
+          api.lms.adminMentors.getMentorReschedules().catch(() => null)
+        ]);
+
+        const data = rescheduleData?.data ?? rescheduleData?.data ?? [];
+        setReschedules(Array.isArray(data) ? data : []);
+        setMentorReschedules(mentorSummary);
+      } catch (err) {
+        console.error('fetchReschedules error', err);
+        setReschedules([]);
+        setMentorReschedules(null);
+      } finally {
+        setLoadingReschedules(false);
+      }
+    };
+
+    fetchReschedules();
+  }, [isOpen, program, mode, api]);
+
+const transformedReschedules = reschedules.map((reschedule: any) => {
+  return {
+    id: reschedule?.id?.toString?.() ?? String(Math.random()).slice(2),
+    mentorName: reschedule?.faculty_name ?? reschedule?.mentor_name ?? '',
+    sessionId: reschedule?.session_id ?? reschedule?.course_code ?? (reschedule?.id ? String(reschedule.id) : undefined),
+    sessionTitle: reschedule?.session_title ?? reschedule?.title ?? '',
+    courseName: reschedule?.course_name ?? reschedule?.course ?? '',
+    originalDateTime: reschedule?.session_datetime ?? reschedule?.original_datetime ?? reschedule?.originalDateTime ?? '',
+    rescheduledDateTime: reschedule?.rescheduled_date_time ?? reschedule?.rescheduledDateTime ?? '',
+    rescheduleCount: reschedule?.rescheduled_count ?? reschedule?.reschedule_count ?? reschedule?.count ?? 1
+  };
+});
+
+  // --- Filter & sort reschedules ---
   const filteredReschedules = transformedReschedules
     .filter(reschedule => {
       if (rescheduleFilter !== 'all' && reschedule.mentorName !== rescheduleFilter) return false;
@@ -186,14 +232,14 @@ useEffect(() => {
         const rescheduleDate = new Date(reschedule.rescheduledDateTime);
         const now = new Date();
         const daysAgo = (now.getTime() - rescheduleDate.getTime()) / (1000 * 60 * 60 * 24);
-
         if (dateRangeFilter === 'week' && daysAgo > 7) return false;
         if (dateRangeFilter === 'month' && daysAgo > 30) return false;
       }
       return true;
     })
     .sort((a, b) => {
-      let aValue, bValue;
+      let aValue: any;
+      let bValue: any;
 
       switch (sortBy) {
         case 'mentor':
@@ -218,19 +264,9 @@ useEffect(() => {
       return sortOrder === 'asc' ? (aValue as number) - (bValue as number) : (bValue as number) - (aValue as number);
     });
 
-  // Calculate summary statistics
-  const totalReschedules = transformedReschedules.length;
-  const mentorRescheduleCounts = transformedReschedules.reduce((acc, reschedule) => {
-    acc[reschedule.mentorName] = (acc[reschedule.mentorName] || 0) + 1;
-    return acc;
-  }, {} as Record<string, number>);
-
-  const topRescheduler = Object.entries(mentorRescheduleCounts)
-    .sort(([, a], [, b]) => b - a)[0];
-
+  // --- Actions ---
   const handleSave = async () => {
     if (mode === 'edit' && !program) {
-      // Creating a new program
       try {
         setLoading(true);
 
@@ -244,33 +280,34 @@ useEffect(() => {
           return;
         }
 
+        // New API payload keys
         const programData = {
-          courseName: editData.name,
-          batchId: selectedBatchId,
-          startDate: editData.startDate,
-          endDate: editData.endDate,
-          facultyId: selectedFacultyId,
-          active: editData.status,
-          sessions: editData.sessions,
-          theoryHours: 30, // Default values
-          practicalHours: 30
-        };
+          course_name: editData.name ?? '',
+          batch_id: selectedBatchId || undefined,
+          start_date: editData.startDate ?? '',
+          end_date: editData.endDate ?? '',
+          faculty_id: selectedFacultyId || undefined,
+          active: (editData.status ?? 'active') === 'active',
+          sessions: editData.sessions ?? 0,
+          theory_hours: 30,
+          practical_hours: 30
+        } as any;
 
         const result = await api.lms.adminPrograms.createProgram(programData);
 
-        if (result.message === 'Course created successfully.') {
+        if (result?.message === 'Course created successfully.' || result?.message === 'Program created successfully.' || result?.success) {
           alert('Program created successfully!');
           onClose();
         } else {
-          alert('Failed to create program: ' + (result.error || 'Unknown error'));
+          alert('Failed to create program: ' + (result?.error || JSON.stringify(result) || 'Unknown error'));
         }
       } catch (error: any) {
-        alert('Error creating program: ' + error.message);
+        alert('Error creating program: ' + (error?.message ?? String(error)));
       } finally {
         setLoading(false);
       }
     } else {
-      // Editing existing program or just closing
+      // editing existing program or just closing
       onClose();
     }
   };
@@ -308,7 +345,6 @@ useEffect(() => {
   };
 
   if (!isOpen) return null;
-
   return (
     <div className="fixed inset-0 z-50 overflow-y-auto animate-fade-in">
       <div className="flex items-center justify-center min-h-screen px-6 py-8">
@@ -337,18 +373,17 @@ useEffect(() => {
                   </label>
                   {mode === 'view' ? (
                     <div className="h-12 flex items-center px-4 bg-gray-800 rounded-lg text-white">
-                      {program?.name || 'N/A'}
+                      {program?.name ?? (program as any)?.course_name ?? 'N/A'}
                     </div>
                   ) : (
                     <input
                       type="text"
-                      value={editData.name}
+                      value={editData.name ?? ''}
                       onChange={(e) => setEditData({ ...editData, name: e.target.value })}
                       className="w-full h-12 px-4 bg-gray-800 border border-gray-700 text-white rounded-lg focus:border-yellow-500 focus:ring-2 focus:ring-yellow-500/20 focus:outline-none transition-all duration-200"
                       placeholder="Enter program name"
                       required
                     />
-                    
                   )}
                 </div>
 
@@ -358,12 +393,12 @@ useEffect(() => {
                   </label>
                   {mode === 'view' ? (
                     <div className="h-12 flex items-center px-4 bg-gray-800 rounded-lg text-white">
-                      {program?.cohort || 'N/A'}
+                      {program?.cohort ?? (program as any)?.batch_name ?? 'N/A'}
                     </div>
                   ) : (
                     <input
                       type="text"
-                      value={editData.cohort}
+                      value={editData.cohort ?? ''}
                       onChange={(e) => setEditData({ ...editData, cohort: e.target.value })}
                       className="w-full h-12 px-4 bg-gray-800 border border-gray-700 text-white rounded-lg focus:border-yellow-500 focus:ring-2 focus:ring-yellow-500/20 focus:outline-none transition-all duration-200"
                       placeholder="Enter cohort name"
@@ -382,11 +417,11 @@ useEffect(() => {
                     </label>
                     <select
                       value={selectedBatchId}
-                      onChange={(e) => setSelectedBatchId(parseInt(e.target.value))}
+                      onChange={(e) => setSelectedBatchId(e.target.value ? parseInt(e.target.value, 10) : 0)}
                       className="w-full h-12 px-4 bg-gray-800 border border-gray-700 text-white rounded-lg focus:border-yellow-500 focus:ring-2 focus:ring-yellow-500/20 focus:outline-none transition-all duration-200"
                       disabled={loading}
                     >
-                      <option value="">{loading ? 'Loading batches...' : 'Select Batch'}</option>
+                      <option value={0} disabled>{loading ? 'Loading batches...' : 'Select Batch'}</option>
                       {batches.map((batch) => (
                         <option key={batch.id} value={batch.id}>
                           {batch.batch_name} ({batch.academic_year} - Semester {batch.semester})
@@ -405,10 +440,10 @@ useEffect(() => {
                       className="w-full h-12 px-4 bg-gray-800 border border-gray-700 text-white rounded-lg focus:border-yellow-500 focus:ring-2 focus:ring-yellow-500/20 focus:outline-none transition-all duration-200"
                       disabled={loading}
                     >
-                      <option value="">{loading ? 'Loading faculties...' : 'Select Faculty'}</option>
+                      <option value="">{loading ? 'Loading faculties...' : `Select Faculty (${faculties.length} available)`}</option>
                       {faculties.map((faculty) => (
                         <option key={faculty.user_id} value={faculty.user_id}>
-                          {faculty.profiles?.name || 'Unknown Faculty'}
+                          {faculty.profiles?.name ?? 'Unknown Faculty'}
                         </option>
                       ))}
                     </select>
@@ -424,9 +459,10 @@ useEffect(() => {
                     <Users className="w-4 h-4 inline mr-2" />
                     Assigned Mentor
                   </label>
+
                   {mode === 'view' ? (
                     <div className="h-12 flex items-center px-4 bg-gray-800 rounded-lg text-white">
-                      {program?.assignedMentor?.name || (
+                      {reschedules[0]?.faculty_name ?? (program as any)?.faculty_name ?? (
                         <span className="text-gray-500 italic">No mentor assigned</span>
                       )}
                     </div>
@@ -438,7 +474,7 @@ useEffect(() => {
                         className="w-full h-12 px-4 bg-gray-800 border border-gray-700 text-white rounded-lg focus:border-yellow-500 focus:ring-2 focus:ring-yellow-500/20 focus:outline-none transition-all duration-200 flex items-center justify-between hover:bg-gray-700/50"
                       >
                         <span className={editData.assignedMentor ? 'text-white' : 'text-gray-400'}>
-                          {editData.assignedMentor ? editData.assignedMentor.name : 'Select Mentor'}
+                          {editData.assignedMentor ? (editData.assignedMentor as any).name : 'Select Mentor'}
                         </span>
                         <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
@@ -458,16 +494,16 @@ useEffect(() => {
                           </div>
                           {filteredMentors.map((mentor) => (
                             <button
-                              key={mentor.id}
+                              key={mentor.user_id}
                               type="button"
                               onClick={() => handleMentorSelect(mentor)}
                               className="w-full px-4 py-3 text-left hover:bg-gray-700/50 transition-colors flex items-center justify-between border-b border-gray-700/50 last:border-b-0"
                             >
                               <div className="flex items-center">
-                                <div className={`w-2.5 h-2.5 rounded-full mr-3 ${getStatusColor(mentor.status)}`}></div>
-                                <span className="text-white font-medium">{mentor.name}</span>
+                                <div className={`w-2.5 h-2.5 rounded-full mr-3 ${getStatusColor(mentor.profiles.name)}`}></div>
+                                <span className="text-white font-medium">{mentor.profiles.name}</span>
                               </div>
-                              {editData.assignedMentor?.id === mentor.id && (
+                              {(editData.assignedMentor as any)?.id === mentor.user_id && (
                                 <svg className="w-4 h-4 text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
                                 </svg>
@@ -488,13 +524,13 @@ useEffect(() => {
                   </label>
                   {mode === 'view' ? (
                     <div className="h-12 flex items-center px-4 bg-gray-800 rounded-lg">
-                      <span className="text-2xl font-bold text-white">{program?.sessions || 0}</span>
+                      <span className="text-2xl font-bold text-white">{program?.sessions ?? (program as any)?.sessions ?? 0}</span>
                     </div>
                   ) : (
                     <input
                       type="number"
-                      value={editData.sessions}
-                      onChange={(e) => setEditData({ ...editData, sessions: parseInt(e.target.value) || 0 })}
+                      value={typeof editData.sessions === 'number' ? editData.sessions : 0}
+                      onChange={(e) => setEditData({ ...editData, sessions: parseInt(e.target.value, 10) || 0 })}
                       className="w-full h-12 px-4 bg-gray-800 border border-gray-700 text-white rounded-lg focus:border-yellow-500 focus:ring-2 focus:ring-yellow-500/20 focus:outline-none transition-all duration-200"
                       placeholder="0"
                       min="0"
@@ -510,16 +546,18 @@ useEffect(() => {
                   </label>
                   {mode === 'view' ? (
                     <div className="h-12 flex items-center px-4 bg-gray-800 rounded-lg">
-                      <span className={`inline-flex px-3 py-1 text-xs font-medium rounded-full ${program?.status === 'active' ? 'text-green-400 bg-green-400/10' :
-                        program?.status === 'completed' ? 'text-yellow-400 bg-yellow-400/10' :
+                      <span className={`inline-flex px-3 py-1 text-xs font-medium rounded-full ${((program as any)?.status ?? (program as any)?.active) === 'active' ? 'text-green-400 bg-green-400/10' :
+                        ((program as any)?.status ?? (program as any)?.active) === 'completed' ? 'text-yellow-400 bg-yellow-400/10' :
                           'text-gray-400 bg-gray-400/10'
                         }`}>
-                        {program?.status ? program.status.charAt(0).toUpperCase() + program.status.slice(1) : 'N/A'}
+                        {((program as any)?.status ?? (program as any)?.active)
+                          ? String(((program as any)?.status ?? (program as any)?.active)).charAt(0).toUpperCase() + String(((program as any)?.status ?? (program as any)?.active)).slice(1)
+                          : 'N/A'}
                       </span>
                     </div>
                   ) : (
                     <select
-                      value={editData.status}
+                      value={editData.status ?? 'active'}
                       onChange={(e) => setEditData({ ...editData, status: e.target.value as Program['status'] })}
                       className="w-full h-12 px-4 bg-gray-800 border border-gray-700 text-white rounded-lg focus:border-yellow-500 focus:ring-2 focus:ring-yellow-500/20 focus:outline-none transition-all duration-200"
                     >
@@ -532,38 +570,38 @@ useEffect(() => {
               </div>
 
               {/* Date Fields - Always 2 columns */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="bg-gray-800/50 rounded-xl p-6 border border-gray-700/50">
-                  <label className="block text-sm font-medium text-gray-300 mb-3">
-                    Start Date
-                  </label>
-                  {mode === 'view' ? (
-                    <div className="h-12 flex items-center px-4 bg-gray-800 rounded-lg text-white">
-                      {program?.startDate ? new Date(program.startDate).toLocaleDateString() : 'N/A'}
-                    </div>
-                  ) : (
-                    <input
-                      type="date"
-                      value={editData.startDate}
-                      onChange={(e) => setEditData({ ...editData, startDate: e.target.value })}
-                      className="w-full h-12 px-4 bg-gray-800 border border-gray-700 text-white rounded-lg focus:border-yellow-500 focus:ring-2 focus:ring-yellow-500/20 focus:outline-none transition-all duration-200"
-                      required
-                    />
-                  )}
-                </div>
-
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="bg-gray-800/50 rounded-xl p-6 border border-gray-700/50">
+                    <label className="block text-sm font-medium text-gray-300 mb-3">
+                      Start Date
+                    </label>
+                    {mode === 'view' ? (
+                      <div className="h-12 flex items-center px-4 bg-gray-800 rounded-lg text-white">
+                        {reschedules[0]?.start_date ? new Date(reschedules[0].start_date).toLocaleDateString() : 'N/A'}
+                      </div>
+                    ) : (
+                      <input
+                        type="date"
+                        value={editData.startDate ?? ''}
+                        onChange={(e) => setEditData({ ...editData, startDate: e.target.value })}
+                        className="w-full h-12 px-4 bg-gray-800 border border-gray-700 text-white rounded-lg focus:border-yellow-500 focus:ring-2 focus:ring-yellow-500/20 focus:outline-none transition-all duration-200"
+                        required
+                      />
+                    )}
+                  </div>
+                
                 <div className="bg-gray-800/50 rounded-xl p-6 border border-gray-700/50">
                   <label className="block text-sm font-medium text-gray-300 mb-3">
                     End Date
                   </label>
                   {mode === 'view' ? (
                     <div className="h-12 flex items-center px-4 bg-gray-800 rounded-lg text-white">
-                      {program?.endDate ? new Date(program.endDate).toLocaleDateString() : 'N/A'}
+                      {reschedules[0]?.end_date ? new Date(reschedules[0].end_date).toLocaleDateString() : 'N/A'}
                     </div>
                   ) : (
                     <input
                       type="date"
-                      value={editData.endDate}
+                      value={editData.endDate ?? ''}
                       onChange={(e) => setEditData({ ...editData, endDate: e.target.value })}
                       className="w-full h-12 px-4 bg-gray-800 border border-gray-700 text-white rounded-lg focus:border-yellow-500 focus:ring-2 focus:ring-yellow-500/20 focus:outline-none transition-all duration-200"
                       required
@@ -571,8 +609,8 @@ useEffect(() => {
                   )}
                 </div>
               </div>
-
-              {/* Mentor Reschedules Section */}
+              
+              Mentor Reschedules Section
               {mode === 'view' && (
                 <div className="mt-8 pt-8 border-t border-gray-700">
                   <div className="mb-6">
@@ -590,7 +628,7 @@ useEffect(() => {
                         <span className="text-gray-400 text-sm">Total Reschedules</span>
                         <Calendar className="w-4 h-4 text-yellow-500" />
                       </div>
-                      <div className="text-2xl font-bold text-white">{totalReschedules}</div>
+                      <div className="text-2xl font-bold text-white">{mentorReschedules?.data?.total_reschedules ?? 0}</div>
                     </div>
 
                     <div className="bg-gray-800/50 rounded-xl p-4 border border-gray-700/50">
@@ -599,10 +637,10 @@ useEffect(() => {
                         <AlertTriangle className="w-4 h-4 text-red-400" />
                       </div>
                       <div className="text-lg font-bold text-white truncate">
-                        {topRescheduler ? topRescheduler[0] : 'N/A'}
+                        {mentorReschedules?.data?.top_mentor?.name ?? 'N/A'}
                       </div>
                       <div className="text-sm text-red-400">
-                        {topRescheduler ? `${topRescheduler[1]} reschedules` : ''}
+                        {mentorReschedules?.data?.top_mentor?.reschedules ? `${mentorReschedules.data.top_mentor.reschedules} reschedules` : ''}
                       </div>
                     </div>
 
@@ -635,9 +673,9 @@ useEffect(() => {
                         className="w-full h-10 px-3 bg-gray-800 border border-gray-700 text-white rounded-lg focus:border-yellow-500 focus:ring-2 focus:ring-yellow-500/20 focus:outline-none transition-all duration-200"
                       >
                         <option value="all">All Mentors</option>
-                        {mockMentors.map((mentor) => (
-                          <option key={mentor.id} value={mentor.name}>
-                            {mentor.name}
+                        {faculties.map((mentor) => (
+                          <option key={mentor.user_id} value={mentor.profiles.name}>
+                            {mentor.profiles.name}
                           </option>
                         ))}
                       </select>
@@ -726,44 +764,84 @@ useEffect(() => {
                               </th>
                             </tr>
                           </thead>
+
                           <tbody className="divide-y divide-gray-700">
-                            {filteredReschedules.map((reschedule) => (
-                              <tr key={reschedule.id} className="hover:bg-gray-700/30 transition-colors">
-                                <td className="px-4 py-3">
-                                  <div className="text-white font-medium">{reschedule.mentorName}</div>
-                                </td>
-                                <td className="px-4 py-3">
-                                  <div className="text-gray-300">
-                                    <div className="font-mono text-sm text-yellow-400">{reschedule.sessionId}</div>
-                                    <div className="text-sm">{reschedule.sessionTitle}</div>
+                            {programMentors.map((reschedule) => {
+                            return (
+                                    <tr key={reschedule.id} className="hover:bg-gray-700/30 transition-colors">
+                                      <td className="px-4 py-3">
+                                        <div className="text-white font-medium">{reschedule.faculty_name}</div>
+                                      </td>
+                                      <td className="px-4 py-3">
+                                        
+                                      <div className="text-gray-300">
+                                    {/* Course Code */}
+                                    <div className="font-mono text-sm text-yellow-400">
+                                      {reschedules?.[0]?.course_code ?? 'N/A'}
+                                    </div>
+
+                                    {/* Course Name */}
+                                    <div className="text-white font-medium">
+                                      {reschedules?.[0]?.course_name ?? 'N/A'}
+                                    </div>
                                   </div>
                                 </td>
                                 <td className="px-4 py-3">
+
                                   <div className="text-gray-300 text-sm">
-                                    <div>{new Date(reschedule.originalDateTime).toLocaleDateString()}</div>
-                                    <div className="text-gray-400">{new Date(reschedule.originalDateTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</div>
+                                    <div>
+                                      {reschedule.class_sessions?.session_datetime 
+                                        ? new Date(reschedule.class_sessions.session_datetime).toLocaleDateString('en-GB')
+                                        : 'N/A'}
+                                    </div>
+                                    <div className="text-gray-400">
+                                      {reschedule.class_sessions?.session_datetime 
+                                        ? new Date(reschedule.class_sessions.session_datetime).toLocaleTimeString('en-GB', { 
+                                            hour: '2-digit', 
+                                            minute: '2-digit',
+                                            hour12: false 
+                                          })
+                                        : ''}
+                                    </div>
                                   </div>
                                 </td>
+
                                 <td className="px-4 py-3">
-                                  <div className="text-gray-300 text-sm">
-                                    <div>{new Date(reschedule.rescheduledDateTime).toLocaleDateString()}</div>
-                                    <div className="text-gray-400">{new Date(reschedule.rescheduledDateTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</div>
+
+                                <div className="text-gray-300 text-sm">
+                                  <div>
+                                    {reschedule.class_sessions?.rescheduled_date_time 
+                                      ? new Date(reschedule.class_sessions.rescheduled_date_time).toLocaleDateString('en-GB')
+                                      : 'N/A'}
                                   </div>
-                                </td>
-                                <td className="px-4 py-3">
-                                  <span className={`inline-flex px-2 py-1 text-xs font-medium rounded-full ${reschedule.rescheduleCount >= 3 ? 'text-red-400 bg-red-400/10' :
-                                    reschedule.rescheduleCount >= 2 ? 'text-yellow-400 bg-yellow-400/10' :
-                                      'text-green-400 bg-green-400/10'
-                                    }`}>
-                                    {reschedule.rescheduleCount}
-                                  </span>
-                                </td>
-                              </tr>
-                            ))}
-                          </tbody>
-                        </table>
-                      </div>
-                    )}
+                                  <div className="text-gray-400">
+                                    {reschedule.class_sessions?.rescheduled_date_time 
+                                      ? new Date(reschedule.class_sessions.rescheduled_date_time).toLocaleTimeString('en-GB', { 
+                                          hour: '2-digit', 
+                                          minute: '2-digit',
+                                          hour12: false 
+                                        })
+                                      : ''}
+                                  </div>
+                                </div>
+                              </td>                           
+
+                              <td className="px-4 py-3">
+                                <span className={`inline-flex px-2 py-1 text-xs font-medium rounded-full ${reschedule.class_sessions.rescheduled_count >= 3 ? 'text-red-400 bg-red-400/10' :
+                                  reschedule.rescheduleCount >= 2 ? 'text-yellow-400 bg-yellow-400/10' :
+                                    'text-green-400 bg-green-400/10'
+                                  }`}>
+
+                                  {reschedule.class_sessions.rescheduled_count || 0}
+
+                                </span>
+                              </td>
+                            </tr>
+                          )})}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
 
                     {!loadingReschedules && filteredReschedules.length === 0 && (
                       <div className="text-center py-8">
