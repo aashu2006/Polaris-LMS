@@ -23,7 +23,7 @@ import GroupModal from '../components/GroupModel';
 const Dashboard: React.FC = () => {
   const { user } = useAuth();
   const api = useApi();
-  const [currentView, setCurrentView] = useState<'dashboard' | 'programs' | 'groups' | 'students' | 'mentors' | 'reports' | 'alerts'>('dashboard');
+  const [currentView, setCurrentView] = useState<'dashboard' | 'programs' | 'students' | 'mentors' | 'reports' | 'alerts'>('dashboard');
   const [selectedProgram, setSelectedProgram] = useState<Program | null>(null);
   const [selectedGroup, setSelectedGroup] = useState<Group | null>(null);
   const [selectedStudent, setSelectedStudent] = useState<Student | null>(null);
@@ -258,16 +258,6 @@ const Dashboard: React.FC = () => {
               }`}
             >
               Programs
-            </button>
-            <button
-              onClick={() => setCurrentView('groups')}
-              className={`px-6 py-3 rounded-xl font-semibold transition-all duration-200 ${
-                currentView === 'groups'
-                  ? 'bg-yellow-500 text-black shadow-lg shadow-yellow-500/25'
-                  : 'text-gray-300 hover:text-white hover:bg-gray-800/50'
-              }`}
-            >
-              Groups
             </button>
             <button
               onClick={() => setCurrentView('students')}
