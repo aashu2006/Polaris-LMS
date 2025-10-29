@@ -55,8 +55,8 @@ const BulkUploadModal: React.FC<BulkUploadModalProps> = ({ isOpen, onClose, onUp
   };
 
   const handleUpload = async () => {
-    if (!selectedFile || !selectedBatchId) {
-      setError('Please select a file and batch');
+    if (!selectedFile) {
+      setError('Please select a file');
       return;
     }
 
@@ -71,37 +71,64 @@ const BulkUploadModal: React.FC<BulkUploadModalProps> = ({ isOpen, onClose, onUp
         setUploadProgress(prev => Math.min(prev + 10, 90));
       }, 200);
 
-      // Try Live LMS adminStudents bulk upload endpoint first
-      let result;
+      const formData = new FormData();
+      formData.append('file', selectedFile);
+      
+      console.log('FormData created with file');
+      
       try {
-        const formData = new FormData();
-        formData.append('file', selectedFile);
-        formData.append('batchId', selectedBatchId.toString());
+        const result = await api.lms.adminStudents.bulkUploadStudents(formData);
         
-        result = await api.lms.adminStudents.bulkUploadStudents(formData);
-      } catch (lmsError) {
-        // Fallback to UMS bulk upload
-        result = await api.students.bulkEnroll(selectedFile, selectedBatchId);
-      }
+        clearInterval(progressInterval);
+        setUploadProgress(100);
 
-      clearInterval(progressInterval);
-      setUploadProgress(100);
+        console.log('Upload response:', result);
 
-      if (result.success) {
-        setSuccess(`Successfully uploaded ${result.count || 'students'} from CSV file`);
-        setSelectedFile(null);
-        setSelectedBatchId(null);
-        if (onUploadComplete) {
-          onUploadComplete();
+        // Check for success in the response
+        if (result.success || result.message?.includes('success')) {
+          const count = result.enrolledCount || result.count || 'students';
+          const batchInfo = result.message?.match(/batch ['"]([^'"]+)['"]/)?.[1] || '';
+          setSuccess(
+            batchInfo 
+              ? `Successfully enrolled ${count} student(s) in batch "${batchInfo}"`
+              : `Successfully enrolled ${count} student(s)`
+          );
+          setSelectedFile(null);
+          setSelectedBatchId(null);
+          if (onUploadComplete) {
+            setTimeout(() => onUploadComplete(), 1500);
+          }
+        } else {
+          setError(result.message || 'Upload failed. Please check the CSV format and try again.');
         }
-      } else {
-        setError(result.message || 'Upload failed');
+      } catch (error: any) {
+        clearInterval(progressInterval);
+        setUploadProgress(0);
+        
+        console.error('Bulk upload error:', error);
+        
+        // Parse error message from response
+        let errorMessage = 'Upload failed. ';
+        
+        if (error.response) {
+          try {
+            const errorData = await error.response.json();
+            console.error('Error response data:', errorData);
+            errorMessage += errorData.message || errorData.error || 'Please check your CSV format.';
+          } catch {
+            errorMessage += 'Server error (500). Please check your CSV format and batch name.';
+          }
+        } else {
+          errorMessage += error.message || 'Please check your CSV format and network connection.';
+        }
+        
+        setError(errorMessage);
       }
     } catch (error: any) {
       setError(error.message || 'Upload failed');
     } finally {
       setLoading(false);
-      setUploadProgress(0);
+      setTimeout(() => setUploadProgress(0), 500);
     }
   };
 
@@ -166,28 +193,6 @@ const BulkUploadModal: React.FC<BulkUploadModalProps> = ({ isOpen, onClose, onUp
             </div>
           </div>
 
-          {/* Batch Selection */}
-          <div>
-            <label className="block text-sm font-medium text-gray-300 mb-2">
-              Select Batch
-            </label>
-            <select
-              value={selectedBatchId || ''}
-              onChange={(e) => setSelectedBatchId(Number(e.target.value))}
-              className="w-full bg-gray-800 border border-gray-700 text-white rounded-lg px-3 py-2 focus:border-yellow-500 focus:outline-none"
-              disabled={loadingBatches}
-            >
-              <option value="">
-                {loadingBatches ? 'Loading batches...' : 'Select Batch'}
-              </option>
-              {batches.map((batch) => (
-                <option key={batch.id} value={batch.id}>
-                  {batch.batch_name} ({batch.academic_year} - Semester {batch.semester})
-                </option>
-              ))}
-            </select>
-          </div>
-
           {/* CSV Format Info */}
           <div className="bg-gray-800 p-4 rounded-lg">
             <h3 className="text-sm font-medium text-gray-300 mb-2">CSV Format Required:</h3>
@@ -196,9 +201,9 @@ const BulkUploadModal: React.FC<BulkUploadModalProps> = ({ isOpen, onClose, onUp
               <p>• Each subsequent row should contain student data</p>
               <p>• Example:</p>
               <div className="bg-gray-700 p-2 rounded mt-2 font-mono text-xs">
-                name,email,rollNumber<br/>
+name,email,rollNumber<br/>
                 John Doe,john.doe@example.com,STU001<br/>
-                Jane Smith,jane.smith@example.com,STU002
+Jane Smith,jane.smith@example.com,STU002
               </div>
             </div>
           </div>
@@ -239,7 +244,7 @@ const BulkUploadModal: React.FC<BulkUploadModalProps> = ({ isOpen, onClose, onUp
             </button>
             <button
               onClick={handleUpload}
-              disabled={!selectedFile || !selectedBatchId || loading}
+              disabled={!selectedFile || loading}
               className="flex-1 px-4 py-2 bg-yellow-600 text-white rounded-lg hover:bg-yellow-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center justify-center gap-2"
             >
               {loading ? (
