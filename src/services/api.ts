@@ -614,8 +614,8 @@ const lmsApi = {
       }, token);
     },
 
-    getStudentPerformance: async (token: string) => {
-      return lmsApiRequest(`${LMS_BASE_URL}/api/v1/admin/students/performance`, {
+    getStudentPerformance: async (page: number = 1, limit: number = 10, token: string) => {
+      return lmsApiRequest(`${LMS_BASE_URL}/api/v1/admin/students/performance?page=${page}&limit=${limit}`, {
         method: 'GET',
       }, token);
     },
@@ -875,7 +875,7 @@ export const useApi = () => {
       adminStudents: {
         bulkUploadStudents: (formData: FormData) => lmsApi.adminStudents.bulkUploadStudents(formData, token),
         getWeeklyAttendanceStats: () => lmsApi.adminStudents.getWeeklyAttendanceStats(token),
-        getStudentPerformance: () => lmsApi.adminStudents.getStudentPerformance(token),
+        getStudentPerformance: (page: number, limit: number) => lmsApi.adminStudents.getStudentPerformance(page, limit, token),
       },
       adminMentorData: {
         getMentorStats: () => lmsApi.adminMentorData.getMentorStats(token),
