@@ -830,7 +830,7 @@ export const useApi = () => {
       students: {
         getAll: () => lmsApi.students.getAll(token),
         getDashboardCards: () => lmsApi.students.getDashboardCards(token),
-        getStudentDetails: (page: number, limit: number) => lmsApi.adminStudents.getStudentDetails(page, limit, token),	        getStudentDetails: (page: number, limit: number) => lmsApi.adminStudents.getStudentDetails(page, limit, token),      },
+        getStudentDetails: (page: number, limit: number) => lmsApi.adminStudents.getStudentDetails(page, limit, token),
       },
       mentors: {
         getAll: () => lmsApi.mentors.getAll(token),
