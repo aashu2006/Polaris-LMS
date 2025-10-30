@@ -196,6 +196,18 @@ const umsApi = {
         body: JSON.stringify(programData),
       }, token);
     },
+    
+    getProgramDetails: async (courseId: number, token: string) => {
+      return apiRequest(`${LMS_BASE_URL}/api/v1/admin/programs/getCourseById/${courseId}`, {
+        method: 'GET',
+      }, token);
+    },
+    
+    getProgramMentors: async (courseId: number, token: string) => {
+      return apiRequest(`${LMS_BASE_URL}/api/v1/admin/ProgramMentors/courses/${courseId}/sessions`, {
+        method: 'GET',
+      }, token);
+    },
   },
 
   // Students
@@ -541,6 +553,20 @@ const lmsApi = {
         method: 'GET',
       }, token);
     },
+
+    // Mentor reschedules summary
+    getMentorReschedules: async (token: string) => {
+      return lmsApiRequest(`${LMS_BASE_URL}/api/v1/admin/mentors/mentorReschedules`, {
+        method: 'GET',
+      }, token);
+    },
+
+    // Program mentors for a specific course
+    getProgramMentors: async (courseId: number, token: string) => {
+      return lmsApiRequest(`${LMS_BASE_URL}/api/v1/admin/ProgramMentors/courses/${courseId}/sessions`, {
+        method: 'GET',
+      }, token);
+    },
   },
 
   adminPrograms: {
@@ -791,6 +817,7 @@ export const useApi = () => {
         getDetails: (courseId: number) => umsApi.programs.getDetails(courseId, token),
         getSessions: (courseId: number) => umsApi.programs.getSessions(courseId, token),
         getReschedules: (courseId: number) => umsApi.programs.getReschedules(courseId, token),
+        getProgramDetails: (courseId: number) => umsApi.programs.getProgramDetails(courseId, token),
         create: (programData: any) => umsApi.programs.create(programData, token),
       },
       students: {
@@ -860,6 +887,8 @@ export const useApi = () => {
         getAllCourses: () => lmsApi.adminMentors.getAllCourses(token),
         getAllSessions: (mentorId: string) => lmsApi.adminMentors.getAllSessions(mentorId, token),
         getRescheduledSessions: () => lmsApi.adminMentors.getRescheduledSessions(token),
+        getMentorReschedules: () => lmsApi.adminMentors.getMentorReschedules(token),
+        getProgramMentors: (courseId: number) => lmsApi.adminMentors.getProgramMentors(courseId, token),
       },
       adminPrograms: {
         getProgramStats: () => lmsApi.adminPrograms.getProgramStats(token),
