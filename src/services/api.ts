@@ -563,7 +563,7 @@ const lmsApi = {
 
     // Program mentors for a specific course
     getProgramMentors: async (courseId: number, token: string) => {
-      return lmsApiRequest(`${LMS_BASE_URL}/api/v1/admin/ProgramMentors/courses/${12}/sessions`, {
+      return lmsApiRequest(`${LMS_BASE_URL}/api/v1/admin/ProgramMentors/courses/${courseId}/sessions`, {
         method: 'GET',
       }, token);
     },
