@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Download, Calendar, Filter, BarChart3, FileText, TrendingUp, Loader2, AlertCircle } from 'lucide-react';
-import { useApi } from '../services/api';
+import { useApi } from '../../services/api';
 
 const ReportsPanel: React.FC = () => {
   const [selectedProgram, setSelectedProgram] = useState('all');
