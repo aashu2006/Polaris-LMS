@@ -1,5 +1,6 @@
-import React from 'react';
-import { Search, Bell, Settings, User, Calendar } from 'lucide-react';
+import React, { useState } from 'react';
+import { Search, Bell, Settings, User, Calendar, ChevronDown, LogOut } from 'lucide-react';
+import { useAuth } from '../../contexts/AuthContext';
 
 interface MentorTopNavbarProps {
   activeSection: string;
@@ -7,6 +8,13 @@ interface MentorTopNavbarProps {
 }
 
 const MentorTopNavbar: React.FC<MentorTopNavbarProps> = ({ activeSection, setActiveSection }) => {
+  const { user, logout } = useAuth();
+  const [showDropdown, setShowDropdown] = useState(false);
+
+  const handleLogout = () => {
+    logout();
+  };
+
   return (
     <header className="bg-gray-800 border-b border-gray-700">
       <div className="px-6 py-4">
@@ -44,8 +52,45 @@ const MentorTopNavbar: React.FC<MentorTopNavbarProps> = ({ activeSection, setAct
               <Settings className="h-5 w-5" />
             </button>
             
-            <div className="w-8 h-8 bg-[#FFC540] rounded-full flex items-center justify-center">
-              <User className="h-4 w-4 text-black" />
+            {/* User Profile Dropdown */}
+            <div className="relative">
+              <button
+                onClick={() => setShowDropdown(!showDropdown)}
+                className="flex items-center space-x-2 hover:bg-gray-700 rounded-lg px-2 py-1 transition-colors duration-200"
+              >
+                <div className="w-8 h-8 bg-[#FFC540] rounded-full flex items-center justify-center">
+                  <User className="h-4 w-4 text-black" />
+                </div>
+                <ChevronDown className="h-4 w-4 text-gray-400" />
+              </button>
+
+              {/* Dropdown Menu */}
+              {showDropdown && (
+                <>
+                  {/* Backdrop to close dropdown */}
+                  <div
+                    className="fixed inset-0 z-10"
+                    onClick={() => setShowDropdown(false)}
+                  />
+                  
+                  <div className="absolute right-0 mt-2 w-64 bg-gray-800 border border-gray-700 rounded-lg shadow-lg z-20">
+                    <div className="px-4 py-3 border-b border-gray-700">
+                      <p className="text-sm font-semibold text-white">{user?.name || 'Mentor'}</p>
+                      <p className="text-xs text-gray-400">{user?.email || ''}</p>
+                    </div>
+                    
+                    <div className="py-2">
+                      <button
+                        onClick={handleLogout}
+                        className="w-full flex items-center space-x-3 px-4 py-2 text-left text-gray-300 hover:bg-gray-700 hover:text-white transition-colors duration-200"
+                      >
+                        <LogOut className="h-4 w-4" />
+                        <span>Logout</span>
+                      </button>
+                    </div>
+                  </div>
+                </>
+              )}
             </div>
           </div>
         </div>
