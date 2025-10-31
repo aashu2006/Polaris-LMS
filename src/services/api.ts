@@ -448,6 +448,11 @@ const lmsApi = {
           method: 'GET',
       }, token);
     },
+    getFacultyStudents: async (token: string) => {
+      return lmsApiRequest(`${LMS_BASE_URL}/api/v1/mentor/cards/faculty-students`, {
+        method: 'GET',
+      }, token);
+    },
     getTotalClasses: async (token: string) => {
       return lmsApiRequest(`${LMS_BASE_URL}/api/v1/mentor/cards/total-classes`, {
           method: 'GET',
@@ -894,6 +899,7 @@ export const useApi = () => {
         update: (mentorId: string, updateData: any) => lmsApi.mentors.update(mentorId, updateData, token),
         remove: (mentorId: string) => lmsApi.mentors.remove(mentorId, token),
         getAllSessions: (mentorId: string) => lmsApi.mentors.getAllSessions(mentorId, token),
+        getFacultyStudents: () => lmsApi.mentors.getFacultyStudents(token),
         getTotalClasses: () => lmsApi.mentors.getTotalClasses(token),
         getTotalCourses: () => lmsApi.mentors.getTotalCourses(token),
         getAvgAttendance: () => lmsApi.mentors.getAvgAttendance(token)
