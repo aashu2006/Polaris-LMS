@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { Calendar, Clock, Users, Video, CreditCard as Edit } from 'lucide-react';
+import { Calendar, Clock, Users, Video } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 import { useApi } from '../../services/api';
 
@@ -131,21 +131,30 @@ const UpcomingSessions: React.FC = () => {
         const data: ApiSession[] = json?.data ?? [];
 
         const now = new Date();
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        
         const filtered = data.filter((s) => {
+          const dt = new Date(s.session_datetime);
+          const sessionDate = new Date(dt);
+          sessionDate.setHours(0, 0, 0, 0);
+          
+          // For live: is_live must be true AND session_datetime must be today
+          const isLive = !!s.is_live && sessionDate.getTime() === today.getTime();
+          
+          // For rescheduled: status must be "postponed" AND session_datetime must be greater than now
           const apiStatus = (s.status || '').toLowerCase();
-          const isLive = apiStatus === 'live' || !!s.is_live;
-          const isRescheduledUpcoming =
-            (apiStatus === 'rescheduled' || apiStatus === 'postponed') &&
-            !!s.rescheduled_date_time && new Date(s.rescheduled_date_time) > now;
-          return isLive || isRescheduledUpcoming;
+          const isRescheduled = apiStatus === 'postponed' && dt > now;
+          
+          return isLive || isRescheduled;
         });
 
         const mapped: UiSession[] = filtered.map((s) => {
           const dt = new Date(s.session_datetime);
-          const today = new Date();
-          const isToday = dt.toDateString() === today.toDateString();
-          const tomorrow = new Date(today);
-          tomorrow.setDate(today.getDate() + 1);
+          const todayForDisplay = new Date();
+          const isToday = dt.toDateString() === todayForDisplay.toDateString();
+          const tomorrow = new Date(todayForDisplay);
+          tomorrow.setDate(todayForDisplay.getDate() + 1);
           const isTomorrow = dt.toDateString() === tomorrow.toDateString();
           const date = isToday
             ? 'Today'
@@ -154,10 +163,23 @@ const UpcomingSessions: React.FC = () => {
               : dt.toLocaleDateString(undefined, { month: 'short', day: 'numeric' }));
           const time = dt.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' });
 
+          // Determine status: only 'live' or 'rescheduled'
+          const sessionDate = new Date(dt);
+          sessionDate.setHours(0, 0, 0, 0);
           const apiStatus = (s.status || '').toLowerCase();
-          const displayStatus = (apiStatus === 'postponed' || apiStatus === 'rescheduled')
-            ? 'rescheduled'
-            : ((apiStatus === 'live' || s.is_live) ? 'live' : (s.status || 'scheduled'));
+          
+          let displayStatus: string;
+          // For live: is_live must be true AND session_datetime must be today
+          if (!!s.is_live && sessionDate.getTime() === today.getTime()) {
+            displayStatus = 'live';
+          } 
+          // For rescheduled: status must be "postponed" AND session_datetime must be greater than now
+          else if (apiStatus === 'postponed' && dt > now) {
+            displayStatus = 'rescheduled';
+          } else {
+            // Should not reach here due to filter, but fallback
+            displayStatus = 'rescheduled';
+          }
 
           return {
             id: s.id,
@@ -167,8 +189,8 @@ const UpcomingSessions: React.FC = () => {
             date,
             time,
             status: displayStatus,
-            action: (apiStatus === 'live' || s.is_live) ? 'Join Now' : 'Calendar',
-            note: (apiStatus === 'postponed' || apiStatus === 'rescheduled' || s.rescheduled_date_time) ? 'Rescheduled' : undefined,
+            action: displayStatus === 'live' ? 'Join Now' : 'Calendar',
+            note: displayStatus === 'rescheduled' ? 'Rescheduled' : undefined,
           };
         });
 
@@ -211,6 +233,17 @@ const UpcomingSessions: React.FC = () => {
     }
   };
 
+  const formatStatusDisplay = (status: string): string => {
+    const statusLower = status.toLowerCase();
+    if (statusLower === 'rescheduled') {
+      return 'RESCHEDULED';
+    }
+    if (statusLower === 'live') {
+      return 'LIVE';
+    }
+    return status.toUpperCase();
+  };
+
   return (
     <div className="bg-gray-800 rounded-xl border border-gray-700">
       <div className="p-6 border-b border-gray-700">
@@ -238,7 +271,7 @@ const UpcomingSessions: React.FC = () => {
                     <div className="flex items-center space-x-3 mb-2">
                       <h3 className="font-semibold text-white">{session.title}</h3>
                       <span className={`px-2 py-1 text-xs rounded-full font-medium ${getStatusColor(session.status)}`}>
-                        {session.status.toUpperCase()}
+                        {formatStatusDisplay(session.status)}
                       </span>
                     </div>
                     

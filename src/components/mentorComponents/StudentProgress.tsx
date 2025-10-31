@@ -42,7 +42,7 @@ const StudentProgress: React.FC = () => {
       <div className="flex flex-col items-center text-center">
         <div className="w-20 h-20 rounded-full overflow-hidden mb-4">
           <img 
-            src="https://images.pexels.com/photos/774909/pexels-photo-774909.jpeg?auto=compress&cs=tinysrgb&w=200&h=200&fit=crop" 
+            src="https://storage.googleapis.com/polaris-tech_cloudbuild/image_Mentor.jpg?auto=compress&cs=tinysrgb&w=200&h=200&fit=crop" 
             alt={displayName || 'Mentor'}
             className="w-full h-full object-cover"
           />
