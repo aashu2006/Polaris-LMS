@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { StudentPage, FacultyPage, AdminPage, Dashboard, Landing } from './pages';
@@ -43,18 +43,11 @@ const RoleProtectedRoute: React.FC<{ children: React.ReactNode; allowedRoles: Ar
 // Role-based Dashboard Component
 const RoleDashboard: React.FC = () => {
   const { user } = useAuth();
-  const [demoRole, setDemoRole] = useState<'admin' | 'mentor' | null>(null);
   
-  // Use demo role if set, otherwise use actual user role
-  const effectiveRole = demoRole || (user?.userType === 'faculty' ? 'mentor' : user?.userType);
+  // Show dashboard based on user role
+  const userRole = user?.userType === 'faculty' ? 'mentor' : user?.userType;
   
-  return (
-    <>
-      {effectiveRole === 'admin' ? <Dashboard /> : <MentorDashboard />}
-      
-      
-    </>
-  );
+  return userRole === 'admin' ? <Dashboard /> : <MentorDashboard />;
 };
 
 const StudentPageWithAuth: React.FC = () => {
