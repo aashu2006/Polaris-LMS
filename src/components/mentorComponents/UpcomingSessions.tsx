@@ -1,6 +1,8 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { Calendar, Clock, Users, Video, CreditCard as Edit } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
+import { useApi } from '../../services/api';
+
 
 interface ApiSession {
   id: number;
@@ -36,6 +38,7 @@ interface UiSession {
 }
 
 const UpcomingSessions: React.FC = () => {
+  const api = useApi();
   const { user, token } = useAuth();
   const [sessions, setSessions] = useState<UiSession[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
@@ -110,7 +113,7 @@ const UpcomingSessions: React.FC = () => {
           throw new Error('Missing faculty id');
         }
 
-        const url = `https://live-class-lms1-672553132888.asia-south1.run.app/api/v1/schedule/faculty/${facultyId}/sessions`;
+        const url = await api.lms.mentors.getAllSessions(facultyId);
 
         const res = await fetch(url, {
           method: 'GET',
@@ -118,19 +121,21 @@ const UpcomingSessions: React.FC = () => {
             'Authorization': `Bearer ${token}`,
           },
         });
+      
         if (!res.ok) {
           const text = await res.text();
           throw new Error(`HTTP ${res.status}: ${text}`);
         }
-        const json = await res.json();
-
+        
+        const json = await api.lms.mentors.getAllSessions(facultyId);
         const data: ApiSession[] = json?.data ?? [];
 
         const now = new Date();
         const filtered = data.filter((s) => {
-          const isLive = !!s.is_live;
+          const apiStatus = (s.status || '').toLowerCase();
+          const isLive = apiStatus === 'live' || !!s.is_live;
           const isRescheduledUpcoming =
-            (s.status?.toLowerCase?.() === 'rescheduled') &&
+            (apiStatus === 'rescheduled' || apiStatus === 'postponed') &&
             !!s.rescheduled_date_time && new Date(s.rescheduled_date_time) > now;
           return isLive || isRescheduledUpcoming;
         });
@@ -149,6 +154,11 @@ const UpcomingSessions: React.FC = () => {
               : dt.toLocaleDateString(undefined, { month: 'short', day: 'numeric' }));
           const time = dt.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' });
 
+          const apiStatus = (s.status || '').toLowerCase();
+          const displayStatus = (apiStatus === 'postponed' || apiStatus === 'rescheduled')
+            ? 'rescheduled'
+            : ((apiStatus === 'live' || s.is_live) ? 'live' : (s.status || 'scheduled'));
+
           return {
             id: s.id,
             title: s.course_name,
@@ -156,9 +166,9 @@ const UpcomingSessions: React.FC = () => {
             subject: s.course_name,
             date,
             time,
-            status: s.is_live ? 'live' : (s.rescheduled_date_time ? 'postponed' : s.status || 'scheduled'),
-            action: s.is_live ? 'Join Now' : 'Calendar',
-            note: s.rescheduled_date_time ? 'Reschedule' : undefined,
+            status: displayStatus,
+            action: (apiStatus === 'live' || s.is_live) ? 'Join Now' : 'Calendar',
+            note: (apiStatus === 'postponed' || apiStatus === 'rescheduled' || s.rescheduled_date_time) ? 'Rescheduled' : undefined,
           };
         });
 
@@ -183,7 +193,7 @@ const UpcomingSessions: React.FC = () => {
     switch (status) {
       case 'live':
         return 'bg-red-900 text-red-300';
-      case 'postponed':
+      case 'rescheduled':
         return 'bg-[#FFC540] text-black';
       default:
         return 'bg-gray-700 text-gray-300';

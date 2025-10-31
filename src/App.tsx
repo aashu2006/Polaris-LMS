@@ -33,15 +33,7 @@ const RoleDashboard: React.FC = () => {
     <>
       {effectiveRole === 'admin' ? <Dashboard /> : <MentorDashboard />}
       
-      {/* Role Switcher for Demo */}
-      <div className="fixed bottom-4 right-4 z-50">
-        <button
-          onClick={() => setDemoRole(effectiveRole === 'admin' ? 'mentor' : 'admin')}
-          className="bg-yellow-400 text-black px-4 py-2 rounded-lg shadow-lg hover:bg-yellow-500 transition-colors duration-200 font-semibold"
-        >
-          Switch to {effectiveRole === 'admin' ? 'Mentor' : 'Admin'} View
-        </button>
-      </div>
+      
     </>
   );
 };

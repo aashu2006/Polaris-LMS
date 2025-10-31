@@ -869,7 +869,7 @@ export const useApi = () => {
         getAllBatches: () => lmsApi.mentors.getAllBatches(token),
         update: (mentorId: string, updateData: any) => lmsApi.mentors.update(mentorId, updateData, token),
         remove: (mentorId: string) => lmsApi.mentors.remove(mentorId, token),
-        getUpcomingSessions: (mentorId: string) => lmsApi.mentors.getAllSessions(mentorId, token)
+        getAllSessions: (mentorId: string) => lmsApi.mentors.getAllSessions(mentorId, token)
       },
       assignments: {
         getAll: () => lmsApi.assignments.getAll(token),
