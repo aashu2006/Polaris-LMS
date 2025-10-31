@@ -442,7 +442,17 @@ const lmsApi = {
         message: 'Mentor removal not supported in current backend version'
       });
     },
-  },
+
+    getAllSessions: async (mentorId: string, token: string) => {
+      return lmsApiRequest(`${LMS_BASE_URL}/api/v1/schedule/faculty/${mentorId}/sessions`, {
+          method: 'GET',
+      }, token);
+    },
+    getFacultyStudents: async (token: string) => {
+      return lmsApiRequest(`${LMS_BASE_URL}/api/v1/mentor/cards/faculty-students`, {
+        method: 'GET',
+      }, token);
+    },
 
   assignments: {
     getAll: async (token: string) => {
@@ -700,6 +710,7 @@ const lmsApi = {
       }, token);
     },
   },
+}
 };
 
 // Multimedia API functions
@@ -863,6 +874,8 @@ export const useApi = () => {
         getAllBatches: () => lmsApi.mentors.getAllBatches(token),
         update: (mentorId: string, updateData: any) => lmsApi.mentors.update(mentorId, updateData, token),
         remove: (mentorId: string) => lmsApi.mentors.remove(mentorId, token),
+        getAllSessions: (mentorId: string) => lmsApi.mentors.getAllSessions(mentorId, token),
+        getFacultyStudents: () => lmsApi.mentors.getFacultyStudents(token),
       },
       assignments: {
         getAll: () => lmsApi.assignments.getAll(token),
