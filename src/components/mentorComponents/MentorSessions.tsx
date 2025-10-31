@@ -1,50 +1,105 @@
-import React, { useState } from 'react';
-import { Video, Users, Clock, Play, Square, Settings, Mic, MicOff, Camera, CameraOff } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { Video, Users, Clock, Play, Square, Settings, Mic, MicOff, Camera, CameraOff, AlertCircle } from 'lucide-react';
+import { useApi } from '../../services/api';
+import { useAuth } from '../../contexts/AuthContext';
+
+interface SessionData {
+  id: number;
+  section_id: number;
+  session_datetime: string;
+  duration: number;
+  venue: string;
+  status: string;
+  attendance_token: string;
+  token_expires_at: string;
+  session_type: string;
+  actual_faculty_id: string;
+  created_at: string;
+  session_location_coordinates: null | string;
+  is_live: boolean;
+  rescheduled_date_time: null | string;
+  rescheduled_count: null | number;
+  course_id: number;
+  course_code: string;
+  course_name: string;
+}
+
+interface ActiveSession extends SessionData {
+  startTime: string;
+  participants: number;
+  maxParticipants: number;
+  recording: boolean;
+}
 
 const MentorSessions: React.FC = () => {
-  const [activeSessions, setActiveSessions] = useState([
-    {
-      id: 1,
-      title: 'React Fundamentals - Components & Props',
-      program: 'Full Stack Development',
-      cohort: '2024-A',
-      startTime: '2:00 PM',
-      duration: '45 minutes elapsed',
-      participants: 8,
-      maxParticipants: 8,
-      status: 'live',
-      recording: true
-    }
-  ]);
-
-  const [upcomingSessions] = useState([
-    {
-      id: 2,
-      title: 'State Management with Redux',
-      program: 'Full Stack Development',
-      cohort: '2024-A',
-      startTime: '4:00 PM',
-      duration: '2 hours',
-      participants: 8,
-      status: 'scheduled'
-    },
-    {
-      id: 3,
-      title: 'API Integration Workshop',
-      program: 'Full Stack Development',
-      cohort: '2024-B',
-      startTime: '6:00 PM',
-      duration: '1.5 hours',
-      participants: 6,
-      status: 'scheduled'
-    }
-  ]);
+  const [activeSessions, setActiveSessions] = useState<ActiveSession[]>([]);
+  const [upcomingSessions, setUpcomingSessions] = useState<SessionData[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const { user } = useAuth();
+  const facultyId = user?.id
+  
+  const api = useApi();
 
   const [sessionControls, setSessionControls] = useState({
     mic: true,
     camera: true,
     recording: true
   });
+
+  useEffect(() => {
+    fetchSessions();
+  }, []);
+
+  const fetchSessions = async () => {
+    try {
+      setLoading(true);
+      setError(null);
+      const response = await api.lms.adminSchedule.getFacultySessions(facultyId);
+      
+      console.log('API Response:', response); // ADD THIS LINE
+      console.log('Sessions data:', response.data); // ADD THIS LINE
+
+      const sessions = response.data || [];
+      const now = new Date();
+      const active: ActiveSession[] = [];
+      const upcoming: SessionData[] = [];
+
+      sessions.forEach((session: SessionData) => {
+        const sessionDate = new Date(session.session_datetime);
+        const sessionEnd = new Date(sessionDate.getTime() + session.duration * 60000);
+
+        // Show active sessions (currently running)
+        if (sessionDate <= now && now <= sessionEnd && session.status !== 'completed' && session.status !== 'cancelled') {
+          active.push({
+            ...session,
+            startTime: sessionDate.toLocaleTimeString('en-US', {
+              hour: '2-digit',
+              minute: '2-digit',
+              hour12: true
+            }),
+            participants: 8,
+            maxParticipants: 8,
+            recording: true
+          });
+        } 
+        // Show upcoming sessions (scheduled in future) or completed sessions (show in upcoming for reference)
+        else if (sessionDate > now && session.status !== 'cancelled' && session.status !== 'completed') {
+          upcoming.push(session);
+        }
+      });
+
+      setActiveSessions(active);
+      setUpcomingSessions(upcoming.sort((a, b) => 
+        new Date(a.session_datetime).getTime() - new Date(b.session_datetime).getTime()
+      ));
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'An error occurred');
+      console.error('Error fetching sessions:', err);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const toggleControl = (control: keyof typeof sessionControls) => {
     setSessionControls(prev => ({
@@ -54,14 +109,61 @@ const MentorSessions: React.FC = () => {
   };
 
   const startSession = (sessionId: number) => {
-    // Logic to start a session
+    const sessionToStart = upcomingSessions.find(s => s.id === sessionId);
+    if (!sessionToStart) return;
+
+    const activeSession: ActiveSession = {
+      ...sessionToStart,
+      startTime: new Date().toLocaleTimeString('en-US', {
+        hour: '2-digit',
+        minute: '2-digit',
+        hour12: true
+      }),
+      participants: 8,
+      maxParticipants: 8,
+      recording: true
+    };
+
+    setActiveSessions(prev => [...prev, activeSession]);
+    setUpcomingSessions(prev => prev.filter(s => s.id !== sessionId));
     console.log(`Starting session ${sessionId}`);
   };
 
   const endSession = (sessionId: number) => {
-    // Logic to end a session
     setActiveSessions(prev => prev.filter(session => session.id !== sessionId));
+    console.log(`Ending session ${sessionId}`);
   };
+
+  const formatDateTime = (dateTimeString: string) => {
+    const date = new Date(dateTimeString);
+    return date.toLocaleString('en-US', {
+      month: 'short',
+      day: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: true
+    });
+  };
+
+  const formatDuration = (minutes: number) => {
+    if (minutes < 60) return `${minutes} minutes`;
+    const hours = Math.floor(minutes / 60);
+    const mins = minutes % 60;
+    return mins > 0 ? `${hours}h ${mins}m` : `${hours} hours`;
+  };
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <div className="text-center">
+          <div className="animate-spin mb-4">
+            <Video className="h-8 w-8 text-blue-500 mx-auto" />
+          </div>
+          <p className="text-gray-600">Loading sessions...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
@@ -71,12 +173,22 @@ const MentorSessions: React.FC = () => {
           <p className="text-gray-600 mt-1">Manage your active and upcoming live sessions.</p>
         </div>
         <div className="flex items-center space-x-3">
-          <button className="flex items-center space-x-2 bg-yellow-400 text-black px-4 py-2 rounded-lg hover:bg-yellow-500 transition-colors duration-200">
+          <button 
+            onClick={fetchSessions}
+            className="flex items-center space-x-2 bg-yellow-400 text-black px-4 py-2 rounded-lg hover:bg-yellow-500 transition-colors duration-200"
+          >
             <Video className="h-4 w-4" />
-            <span>Start Quick Session</span>
+            <span>Refresh Sessions</span>
           </button>
         </div>
       </div>
+
+      {error && (
+        <div className="bg-red-50 border border-red-200 rounded-lg p-4 flex items-center space-x-3">
+          <AlertCircle className="h-5 w-5 text-red-600" />
+          <p className="text-red-700">{error}</p>
+        </div>
+      )}
 
       {/* Active Sessions */}
       {activeSessions.length > 0 && (
@@ -93,7 +205,7 @@ const MentorSessions: React.FC = () => {
               <div key={session.id} className="border-2 border-red-200 bg-red-50 rounded-lg p-6">
                 <div className="flex items-start justify-between mb-4">
                   <div className="flex-1">
-                    <h3 className="text-lg font-bold text-gray-900 mb-2">{session.title}</h3>
+                    <h3 className="text-lg font-bold text-gray-900 mb-2">{session.course_name}</h3>
                     <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 text-sm text-gray-600">
                       <div className="flex items-center space-x-2">
                         <Clock className="h-4 w-4" />
@@ -101,14 +213,14 @@ const MentorSessions: React.FC = () => {
                       </div>
                       <div className="flex items-center space-x-2">
                         <Video className="h-4 w-4" />
-                        <span>{session.duration}</span>
+                        <span>{formatDuration(session.duration)}</span>
                       </div>
                       <div className="flex items-center space-x-2">
                         <Users className="h-4 w-4" />
                         <span>{session.participants}/{session.maxParticipants} joined</span>
                       </div>
                       <div className="text-sm">
-                        <span className="font-medium">{session.program}</span> • {session.cohort}
+                        <span className="font-medium">{session.course_code}</span> • {session.session_type}
                       </div>
                     </div>
                   </div>
@@ -175,48 +287,52 @@ const MentorSessions: React.FC = () => {
       {/* Upcoming Sessions */}
       <div className="bg-white rounded-xl shadow-sm border border-gray-200">
         <div className="p-6 border-b border-gray-200">
-          <h2 className="text-xl font-bold text-gray-900">Upcoming Sessions</h2>
+          <h2 className="text-xl font-bold text-gray-900">Upcoming Sessions ({upcomingSessions.length})</h2>
         </div>
         
         <div className="p-6">
-          <div className="space-y-4">
-            {upcomingSessions.map((session) => (
-              <div key={session.id} className="border border-gray-200 rounded-lg p-4 hover:shadow-md transition-shadow duration-200">
-                <div className="flex items-start justify-between">
-                  <div className="flex-1">
-                    <h3 className="font-semibold text-gray-900 mb-2">{session.title}</h3>
-                    <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 text-sm text-gray-600">
-                      <div className="flex items-center space-x-2">
-                        <Clock className="h-4 w-4" />
-                        <span>Starts at {session.startTime}</span>
-                      </div>
-                      <div className="flex items-center space-x-2">
-                        <Video className="h-4 w-4" />
-                        <span>{session.duration}</span>
-                      </div>
-                      <div className="flex items-center space-x-2">
-                        <Users className="h-4 w-4" />
-                        <span>{session.participants} students</span>
-                      </div>
-                      <div className="text-sm">
-                        <span className="font-medium">{session.program}</span> • {session.cohort}
+          {upcomingSessions.length === 0 ? (
+            <p className="text-center text-gray-500 py-8">No upcoming sessions</p>
+          ) : (
+            <div className="space-y-4">
+              {upcomingSessions.map((session) => (
+                <div key={session.id} className="border border-gray-200 rounded-lg p-4 hover:shadow-md transition-shadow duration-200">
+                  <div className="flex items-start justify-between">
+                    <div className="flex-1">
+                      <h3 className="font-semibold text-gray-900 mb-2">{session.course_name}</h3>
+                      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 text-sm text-gray-600">
+                        <div className="flex items-center space-x-2">
+                          <Clock className="h-4 w-4" />
+                          <span>{formatDateTime(session.session_datetime)}</span>
+                        </div>
+                        <div className="flex items-center space-x-2">
+                          <Video className="h-4 w-4" />
+                          <span>{formatDuration(session.duration)}</span>
+                        </div>
+                        <div className="flex items-center space-x-2">
+                          <Users className="h-4 w-4" />
+                          <span>{session.session_type}</span>
+                        </div>
+                        <div className="text-sm">
+                          <span className="font-medium">{session.course_code}</span>
+                        </div>
                       </div>
                     </div>
-                  </div>
-                  
-                  <div className="flex items-center space-x-2">
-                    <button 
-                      onClick={() => startSession(session.id)}
-                      className="flex items-center space-x-2 bg-green-500 text-white px-4 py-2 rounded-lg hover:bg-green-600 transition-colors duration-200"
-                    >
-                      <Play className="h-4 w-4" />
-                      <span>Start Session</span>
-                    </button>
+                    
+                    <div className="flex items-center space-x-2">
+                      <button 
+                        onClick={() => startSession(session.id)}
+                        className="flex items-center space-x-2 bg-green-500 text-white px-4 py-2 rounded-lg hover:bg-green-600 transition-colors duration-200"
+                      >
+                        <Play className="h-4 w-4" />
+                        <span>Start Session</span>
+                      </button>
+                    </div>
                   </div>
                 </div>
-              </div>
-            ))}
-          </div>
+              ))}
+            </div>
+          )}
         </div>
       </div>
 
@@ -225,8 +341,8 @@ const MentorSessions: React.FC = () => {
         <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm font-medium text-gray-600">Sessions Today</p>
-              <p className="text-3xl font-bold text-gray-900">3</p>
+              <p className="text-sm font-medium text-gray-600">Active Sessions</p>
+              <p className="text-3xl font-bold text-gray-900">{activeSessions.length}</p>
             </div>
             <div className="w-12 h-12 bg-black rounded-lg flex items-center justify-center">
               <Video className="h-6 w-6 text-yellow-400" />
@@ -237,8 +353,8 @@ const MentorSessions: React.FC = () => {
         <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm font-medium text-gray-600">Total Participants</p>
-              <p className="text-3xl font-bold text-gray-900">22</p>
+              <p className="text-sm font-medium text-gray-600">Upcoming Sessions</p>
+              <p className="text-3xl font-bold text-gray-900">{upcomingSessions.length}</p>
             </div>
             <div className="w-12 h-12 bg-black rounded-lg flex items-center justify-center">
               <Users className="h-6 w-6 text-yellow-400" />
@@ -249,8 +365,8 @@ const MentorSessions: React.FC = () => {
         <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm font-medium text-gray-600">Session Hours</p>
-              <p className="text-3xl font-bold text-gray-900">6.5</p>
+              <p className="text-sm font-medium text-gray-600">Total Sessions</p>
+              <p className="text-3xl font-bold text-gray-900">{activeSessions.length + upcomingSessions.length}</p>
             </div>
             <div className="w-12 h-12 bg-black rounded-lg flex items-center justify-center">
               <Clock className="h-6 w-6 text-yellow-400" />

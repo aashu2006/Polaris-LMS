@@ -700,6 +700,15 @@ const lmsApi = {
       }, token);
     },
   },
+
+  adminSchedule: {
+  getFacultySessions: async (facultyId: string, token: string) => {
+    return lmsApiRequest(`${LMS_BASE_URL}/api/v1/schedule/faculty/${facultyId}/sessions?limit=1000`, {
+      method: 'GET',
+    }, token);
+  },
+},
+
 };
 
 // Multimedia API functions
@@ -917,6 +926,9 @@ export const useApi = () => {
         getAttendance: () => lmsApi.adminReports.getAttendance(token),
         getSessionAnalytics: () => lmsApi.adminReports.getSessionAnalytics(token),
         getFacultyPerformance: () => lmsApi.adminReports.getFacultyPerformance(token),
+      },
+      adminSchedule: {
+        getFacultySessions: (facultyId: string) => lmsApi.adminSchedule.getFacultySessions(facultyId, token),
       },
     },
     multimedia: {
