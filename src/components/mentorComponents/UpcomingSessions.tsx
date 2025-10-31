@@ -123,7 +123,7 @@ const UpcomingSessions: React.FC = () => {
           throw new Error(`HTTP ${res.status}: ${text}`);
         }
         const json = await res.json();
-        console.log("API data: ", json)
+
         const data: ApiSession[] = json?.data ?? [];
 
         const now = new Date();
@@ -201,7 +201,6 @@ const UpcomingSessions: React.FC = () => {
     }
   };
 
-  console.log("token: ", token)
   return (
     <div className="bg-gray-800 rounded-xl border border-gray-700">
       <div className="p-6 border-b border-gray-700">
