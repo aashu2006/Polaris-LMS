@@ -21,6 +21,25 @@ const ProtectedRoute: React.FC<{ children: React.ReactNode; redirectTo: string }
   return isAuthenticated ? <>{children}</> : <Navigate to={redirectTo} replace />;
 };
 
+// Role guard: ensures only users with the right role can access a route, otherwise redirects to their own dashboard
+const RoleProtectedRoute: React.FC<{ children: React.ReactNode; allowedRoles: Array<'admin' | 'mentor' | 'student'> }> = ({ children, allowedRoles }) => {
+  const { user } = useAuth();
+  const normalizedRole = user?.userType === 'faculty' ? 'mentor' : (user?.userType as 'admin' | 'mentor' | 'student' | undefined);
+
+  if (!normalizedRole) {
+    return <Navigate to="/admin/login" replace />;
+  }
+
+  if (!allowedRoles.includes(normalizedRole)) {
+    // Redirect to the correct dashboard for the current role
+    if (normalizedRole === 'admin') return <Navigate to="/admin/dashboard" replace />;
+    if (normalizedRole === 'mentor') return <Navigate to="/faculty/dashboard" replace />;
+    if (normalizedRole === 'student') return <Navigate to="/student/dashboard" replace />;
+  }
+
+  return <>{children}</>;
+};
+
 // Role-based Dashboard Component
 const RoleDashboard: React.FC = () => {
   const { user } = useAuth();
@@ -92,7 +111,9 @@ const AppRoutes: React.FC = () => {
         path="/admin/dashboard"
         element={
           <ProtectedRoute redirectTo="/admin/login">
-            <RoleDashboard />
+            <RoleProtectedRoute allowedRoles={['admin']}>
+              <RoleDashboard />
+            </RoleProtectedRoute>
           </ProtectedRoute>
         }
       />
@@ -104,7 +125,9 @@ const AppRoutes: React.FC = () => {
         path="/faculty/dashboard"
         element={
           <ProtectedRoute redirectTo="/faculty/login">
-            <RoleDashboard />
+            <RoleProtectedRoute allowedRoles={['mentor']}>
+              <RoleDashboard />
+            </RoleProtectedRoute>
           </ProtectedRoute>
         }
       />
@@ -112,7 +135,9 @@ const AppRoutes: React.FC = () => {
         path="/mentor/dashboard"
         element={
           <ProtectedRoute redirectTo="/mentor/login">
-            <RoleDashboard />
+            <RoleProtectedRoute allowedRoles={['mentor']}>
+              <RoleDashboard />
+            </RoleProtectedRoute>
           </ProtectedRoute>
         }
       />
@@ -123,7 +148,9 @@ const AppRoutes: React.FC = () => {
         path="/student/dashboard"
         element={
           <ProtectedRoute redirectTo="/student/login">
-            <RoleDashboard />
+            <RoleProtectedRoute allowedRoles={['student']}>
+              <RoleDashboard />
+            </RoleProtectedRoute>
           </ProtectedRoute>
         }
       />
