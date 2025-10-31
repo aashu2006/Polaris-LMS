@@ -1,7 +1,35 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import { Users, User } from 'lucide-react';
+import { useAuth } from '../../contexts/AuthContext';
 
 const StudentProgress: React.FC = () => {
+  const { user, token } = useAuth();
+
+  const getNameFromToken = (t?: string | null): string | null => {
+    if (!t) return null;
+    try {
+      const parts = t.split('.');
+      if (parts.length < 2) return null;
+      const payload = parts[1]
+        .replace(/-/g, '+')
+        .replace(/_/g, '/');
+      const decoded = JSON.parse(decodeURIComponent(escape(atob(payload))));
+      return (
+        decoded.name ||
+        decoded.username ||
+        decoded.preferred_username ||
+        decoded.email ||
+        null
+      );
+    } catch {
+      return null;
+    }
+  };
+
+  const displayName = useMemo(() => {
+    return user?.name || getNameFromToken(token) || '—';
+  }, [user, token]);
+
   return (
     <div className="bg-gray-800 rounded-xl border border-gray-700 p-6">
       <div className="flex items-center justify-between mb-4">
@@ -15,12 +43,12 @@ const StudentProgress: React.FC = () => {
         <div className="w-20 h-20 rounded-full overflow-hidden mb-4">
           <img 
             src="https://images.pexels.com/photos/774909/pexels-photo-774909.jpeg?auto=compress&cs=tinysrgb&w=200&h=200&fit=crop" 
-            alt="Sarah Mitchell"
+            alt={displayName || 'Mentor'}
             className="w-full h-full object-cover"
           />
         </div>
         
-        <h4 className="text-xl font-bold text-white mb-1">Sarah Mitchell</h4>
+        <h4 className="text-xl font-bold text-white mb-1">{displayName}</h4>
         <div className="flex items-center space-x-2 text-sm text-gray-400 mb-4">
           <div className="w-4 h-4 bg-gray-600 rounded flex items-center justify-center">
             <div className="w-2 h-2 bg-gray-400 rounded"></div>

@@ -453,6 +453,22 @@ const lmsApi = {
         method: 'GET',
       }, token);
     },
+    getTotalClasses: async (token: string) => {
+      return lmsApiRequest(`${LMS_BASE_URL}/api/v1/mentor/cards/total-classes`, {
+          method: 'GET',
+      }, token);
+    },
+    getTotalCourses: async (token: string) => {
+      return lmsApiRequest(`${LMS_BASE_URL}/api/v1/mentor/cards/total-courses`, {
+          method: 'GET',
+      }, token);
+    },
+    getAvgAttendance: async (token: string) => {
+      return lmsApiRequest(`${LMS_BASE_URL}/api/v1/mentor/cards/avg-attendance`, {
+          method: 'GET',
+      }, token);
+    },
+  },
 
   assignments: {
     getAll: async (token: string) => {
@@ -710,7 +726,15 @@ const lmsApi = {
       }, token);
     },
   },
-}
+
+  adminSchedule: {
+  getFacultySessions: async (facultyId: string, token: string) => {
+    return lmsApiRequest(`${LMS_BASE_URL}/api/v1/schedule/faculty/${facultyId}/sessions?limit=1000`, {
+      method: 'GET',
+    }, token);
+  },
+},
+
 };
 
 // Multimedia API functions
@@ -876,6 +900,9 @@ export const useApi = () => {
         remove: (mentorId: string) => lmsApi.mentors.remove(mentorId, token),
         getAllSessions: (mentorId: string) => lmsApi.mentors.getAllSessions(mentorId, token),
         getFacultyStudents: () => lmsApi.mentors.getFacultyStudents(token),
+        getTotalClasses: () => lmsApi.mentors.getTotalClasses(token),
+        getTotalCourses: () => lmsApi.mentors.getTotalCourses(token),
+        getAvgAttendance: () => lmsApi.mentors.getAvgAttendance(token)
       },
       assignments: {
         getAll: () => lmsApi.assignments.getAll(token),
@@ -930,6 +957,9 @@ export const useApi = () => {
         getAttendance: () => lmsApi.adminReports.getAttendance(token),
         getSessionAnalytics: () => lmsApi.adminReports.getSessionAnalytics(token),
         getFacultyPerformance: () => lmsApi.adminReports.getFacultyPerformance(token),
+      },
+      adminSchedule: {
+        getFacultySessions: (facultyId: string) => lmsApi.adminSchedule.getFacultySessions(facultyId, token),
       },
     },
     multimedia: {

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import MentorSummaryCards from './MentorSummaryCards';
 import UpcomingSessions from './UpcomingSessions';
 import StudentProgress from './StudentProgress';
@@ -9,6 +9,7 @@ import MentorRecordings from './MentorRecordings';
 import MentorSessions from './MentorSessions';
 import MentorAnalytics from './MentorAnalytics';
 import StudentFeedbackHistory from './StudentFeedbackHistory';
+import { useAuth } from '../../contexts/AuthContext';
 
 interface MentorOverviewProps {
   activeSection: string;
@@ -16,12 +17,29 @@ interface MentorOverviewProps {
 }
 
 const MentorOverview: React.FC<MentorOverviewProps> = ({ activeSection, setActiveSection }) => {
+  const { user, token } = useAuth();
   const [activeTab, setActiveTab] = useState('overview');
   const [feedbackHistoryModal, setFeedbackHistoryModal] = useState<{ isOpen: boolean; studentId: number | null; studentName: string }>({
     isOpen: false,
     studentId: null,
     studentName: ''
   });
+
+  const displayName = useMemo(() => {
+    const getNameFromToken = (t?: string | null): string | null => {
+      if (!t) return null;
+      try {
+        const parts = t.split('.');
+        if (parts.length < 2) return null;
+        const payload = parts[1].replace(/-/g, '+').replace(/_/g, '/');
+        const decoded = JSON.parse(decodeURIComponent(escape(atob(payload))));
+        return decoded.name || decoded.username || decoded.preferred_username || decoded.email || null;
+      } catch {
+        return null;
+      }
+    };
+    return user?.name || getNameFromToken(token) || '';
+  }, [user, token]);
 
   const tabItems = [
     { id: 'overview', label: 'Overview' },
@@ -95,7 +113,7 @@ const MentorOverview: React.FC<MentorOverviewProps> = ({ activeSection, setActiv
   return (
     <div className="space-y-6 font-jakarta">
       <div>
-        <h1 className="text-3xl font-bold text-white">Welcome back, Dr. Sarah!</h1>
+        <h1 className="text-3xl font-bold text-white">Welcome back, {displayName || 'Mentor'}!</h1>
         <p className="text-gray-400 mt-1">Here's what's happening with your students and sessions.</p>
       </div>
       
