@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { User, Mail, Hash, Users, Calendar, BarChart } from 'lucide-react';
-import type { Student } from '../types';
+import type { Student } from '../../types';
 import Modal from './Modal';
 
 interface StudentModalProps {

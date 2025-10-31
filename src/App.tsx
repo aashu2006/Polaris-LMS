@@ -1,9 +1,10 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
-import { StudentPage, FacultyPage, AdminPage, Dashboard } from './pages';
+import { StudentPage, FacultyPage, AdminPage, Dashboard, Landing } from './pages';
+import MentorDashboard from './components/mentorComponents/MentorDashboard';
 
-const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+const ProtectedRoute: React.FC<{ children: React.ReactNode; redirectTo: string }> = ({ children, redirectTo }) => {
   const { isAuthenticated, loading } = useAuth();
 
   if (loading) {
@@ -17,14 +18,39 @@ const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) =
     );
   }
 
-  return isAuthenticated ? <>{children}</> : <Navigate to="/" replace />;
+  return isAuthenticated ? <>{children}</> : <Navigate to={redirectTo} replace />;
+};
+
+// Role-based Dashboard Component
+const RoleDashboard: React.FC = () => {
+  const { user } = useAuth();
+  const [demoRole, setDemoRole] = useState<'admin' | 'mentor' | null>(null);
+  
+  // Use demo role if set, otherwise use actual user role
+  const effectiveRole = demoRole || (user?.userType === 'faculty' ? 'mentor' : user?.userType);
+  
+  return (
+    <>
+      {effectiveRole === 'admin' ? <Dashboard /> : <MentorDashboard />}
+      
+      {/* Role Switcher for Demo */}
+      <div className="fixed bottom-4 right-4 z-50">
+        <button
+          onClick={() => setDemoRole(effectiveRole === 'admin' ? 'mentor' : 'admin')}
+          className="bg-yellow-400 text-black px-4 py-2 rounded-lg shadow-lg hover:bg-yellow-500 transition-colors duration-200 font-semibold"
+        >
+          Switch to {effectiveRole === 'admin' ? 'Mentor' : 'Admin'} View
+        </button>
+      </div>
+    </>
+  );
 };
 
 const StudentPageWithAuth: React.FC = () => {
   const { login, isAuthenticated } = useAuth();
 
   if (isAuthenticated) {
-    return <Navigate to="/dashboard" replace />;
+    return <Navigate to="/student/dashboard" replace />;
   }
 
   return <StudentPage onLogin={login} />;
@@ -34,17 +60,27 @@ const FacultyPageWithAuth: React.FC = () => {
   const { login, isAuthenticated } = useAuth();
 
   if (isAuthenticated) {
-    return <Navigate to="/dashboard" replace />;
+    return <Navigate to="/faculty/dashboard" replace />;
   }
 
   return <FacultyPage onLogin={login} />;
+};
+
+const LandingWithAuth: React.FC = () => {
+  const { login, isAuthenticated } = useAuth();
+
+  if (isAuthenticated) {
+    return <Navigate to="/admin/dashboard" replace />;
+  }
+
+  return <Landing onLogin={login} />;
 };
 
 const AdminPageWithAuth: React.FC = () => {
   const { login, isAuthenticated } = useAuth();
 
   if (isAuthenticated) {
-    return <Navigate to="/dashboard" replace />;
+    return <Navigate to="/admin/dashboard" replace />;
   }
 
   return <AdminPage onLogin={login} />;
@@ -55,25 +91,58 @@ const AppRoutes: React.FC = () => {
 
   return (
     <Routes>
-      {/* Public Routes */}
-      <Route path="/" element={<AdminPageWithAuth />} />
-      <Route path="/admin" element={<AdminPageWithAuth />} />
-      <Route path="/faculty" element={<FacultyPageWithAuth />} />
+      {/* Landing Page */}
+      <Route path="/" element={<LandingWithAuth />} />
 
-      {/* Protected Routes */}
+      {/* Admin Routes */}
+      <Route path="/admin/login" element={<AdminPageWithAuth />} />
       <Route
-        path="/dashboard"
+        path="/admin/dashboard"
         element={
-          <ProtectedRoute>
-            <Dashboard />
+          <ProtectedRoute redirectTo="/admin/login">
+            <RoleDashboard />
           </ProtectedRoute>
         }
       />
 
-      {/* Redirect authenticated users from login pages to dashboard */}
+      {/* Faculty/Mentor Routes */}
+      <Route path="/faculty/login" element={<FacultyPageWithAuth />} />
+      <Route path="/mentor/login" element={<FacultyPageWithAuth />} />
+      <Route
+        path="/faculty/dashboard"
+        element={
+          <ProtectedRoute redirectTo="/faculty/login">
+            <RoleDashboard />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/mentor/dashboard"
+        element={
+          <ProtectedRoute redirectTo="/mentor/login">
+            <RoleDashboard />
+          </ProtectedRoute>
+        }
+      />
+
+      {/* Student Routes */}
+      <Route path="/student/login" element={<StudentPageWithAuth />} />
+      <Route
+        path="/student/dashboard"
+        element={
+          <ProtectedRoute redirectTo="/student/login">
+            <RoleDashboard />
+          </ProtectedRoute>
+        }
+      />
+
+      {/* Redirect authenticated users to appropriate dashboard */}
       {isAuthenticated && (
-        <Route path="*" element={<Navigate to="/dashboard" replace />} />
+        <Route path="*" element={<Navigate to="/admin/dashboard" replace />} />
       )}
+      
+      {/* Redirect unauthenticated users to admin login */}
+      <Route path="*" element={<Navigate to="/admin/login" replace />} />
     </Routes>
   );
 };
@@ -89,3 +158,4 @@ const App: React.FC = () => {
 };
 
 export default App;
+

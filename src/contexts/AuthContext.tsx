@@ -88,11 +88,13 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 
     // Navigate based on user type
     if (currentUser?.userType === 'admin') {
-      window.location.href = '/admin';
+      window.location.href = '/admin/login';
     } else if (currentUser?.userType === 'faculty') {
-      window.location.href = '/faculty';
+      window.location.href = '/faculty/login';
+    } else if (currentUser?.userType === 'student') {
+      window.location.href = '/student/login';
     } else {
-      window.location.href = '/';
+      window.location.href = '/admin/login';
     }
   };
 
