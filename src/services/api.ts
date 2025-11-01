@@ -468,6 +468,14 @@ const lmsApi = {
           method: 'GET',
       }, token);
     },
+
+    submitFeedback: async (feedbackData: any, token: string) => {
+      return lmsApiRequest(`${LMS_BASE_URL}/api/v1/mentor/cards/submit-feedback`, {
+        method: 'POST',
+        body: JSON.stringify(feedbackData),
+        headers: { 'Content-Type': 'application/json' },
+      }, token);
+    },
   },
 
   assignments: {
@@ -477,6 +485,8 @@ const lmsApi = {
       }, token);
     },
   },
+
+
 
   programs: {
     create: async (programData: any, token: string) => {
@@ -902,7 +912,8 @@ export const useApi = () => {
         getFacultyStudents: () => lmsApi.mentors.getFacultyStudents(token),
         getTotalClasses: () => lmsApi.mentors.getTotalClasses(token),
         getTotalCourses: () => lmsApi.mentors.getTotalCourses(token),
-        getAvgAttendance: () => lmsApi.mentors.getAvgAttendance(token)
+        getAvgAttendance: () => lmsApi.mentors.getAvgAttendance(token),
+        submitFeedback: (feedbackData: any) => lmsApi.mentors.submitFeedback(feedbackData, token),
       },
       assignments: {
         getAll: () => lmsApi.assignments.getAll(token),
