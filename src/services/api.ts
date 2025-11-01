@@ -569,7 +569,7 @@ const lmsApi = {
     },
 
     getAllSessions: async (mentorId: string, token: string) => {
-      return lmsApiRequest(`${LMS_BASE_URL}/api/v1/admin/mentors/getAllSessions/${mentorId}`, {
+      return lmsApiRequest(`${LMS_BASE_URL}/api/v1/admin/mentors/getAllSessions?facultyId=${mentorId}`, {
         method: 'GET',
       }, token);
     },
