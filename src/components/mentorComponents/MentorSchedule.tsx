@@ -119,6 +119,7 @@ const MentorSchedule: React.FC = () => {
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
 
+
   useEffect(() => {
     let isMounted = true;
   
@@ -132,8 +133,10 @@ const MentorSchedule: React.FC = () => {
         setLoading(true);
         setError(null);
   
+
         const facultyId = user?.id || '';
         const resp = await api.lms.adminMentors.getAllSessions(facultyId);
+
         const data = Array.isArray(resp) ? resp : (resp?.data ?? []);
   
         // Map to UiSession

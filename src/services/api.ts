@@ -448,6 +448,26 @@ const lmsApi = {
           method: 'GET',
       }, token);
     },
+    getFacultyStudents: async (token: string) => {
+      return lmsApiRequest(`${LMS_BASE_URL}/api/v1/mentor/cards/faculty-students`, {
+        method: 'GET',
+      }, token);
+    },
+    getTotalClasses: async (token: string) => {
+      return lmsApiRequest(`${LMS_BASE_URL}/api/v1/mentor/cards/total-classes`, {
+          method: 'GET',
+      }, token);
+    },
+    getTotalCourses: async (token: string) => {
+      return lmsApiRequest(`${LMS_BASE_URL}/api/v1/mentor/cards/total-courses`, {
+          method: 'GET',
+      }, token);
+    },
+    getAvgAttendance: async (token: string) => {
+      return lmsApiRequest(`${LMS_BASE_URL}/api/v1/mentor/cards/avg-attendance`, {
+          method: 'GET',
+      }, token);
+    },
   },
 
   assignments: {
@@ -878,7 +898,11 @@ export const useApi = () => {
         getAllBatches: () => lmsApi.mentors.getAllBatches(token),
         update: (mentorId: string, updateData: any) => lmsApi.mentors.update(mentorId, updateData, token),
         remove: (mentorId: string) => lmsApi.mentors.remove(mentorId, token),
-        getAllSessions: (mentorId: string) => lmsApi.mentors.getAllSessions(mentorId, token)
+        getAllSessions: (mentorId: string) => lmsApi.mentors.getAllSessions(mentorId, token),
+        getFacultyStudents: () => lmsApi.mentors.getFacultyStudents(token),
+        getTotalClasses: () => lmsApi.mentors.getTotalClasses(token),
+        getTotalCourses: () => lmsApi.mentors.getTotalCourses(token),
+        getAvgAttendance: () => lmsApi.mentors.getAvgAttendance(token)
       },
       assignments: {
         getAll: () => lmsApi.assignments.getAll(token),
