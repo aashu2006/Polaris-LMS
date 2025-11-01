@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { Calendar, Plus, Clock, Users, Video, CreditCard as Edit, Trash2, RotateCcw, X, MapPin, Loader2 } from 'lucide-react';
+import React, { useState, useEffect, useMemo } from 'react';
+import { Calendar, Plus, Clock, Users, Video, CreditCard as Edit, Trash2, RotateCcw, X, Loader2 } from 'lucide-react';
 import { useApi } from '../../services/api';
 import { useAuth } from '../../contexts/AuthContext';
         
@@ -20,12 +20,10 @@ const MentorSchedule: React.FC = () => {
     reason: ''
   });
   const [scheduleModal, setScheduleModal] = useState(false);
-  const [loading, setLoading] = useState(false);
   const [batches, setBatches] = useState<any[]>([]);
   const [sections, setSections] = useState<any[]>([]);
   const [programs, setPrograms] = useState<any[]>([]);
   const [selectedBatchId, setSelectedBatchId] = useState('');
-  const { user } = useAuth();
   const [sessionData, setSessionData] = useState({
     section_id: '',
     session_type: 'theory',
@@ -121,22 +119,6 @@ const MentorSchedule: React.FC = () => {
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
 
-  const BASE_URL = useMemo(() => {
-    return (import.meta as any).env?.VITE_LMS_BASE_URL || '<<base_url>>';
-  }, []);
-
-  const getFacultyIdFromToken = (t?: string | null): string | null => {
-    if (!t) return null;
-    try {
-      const parts = t.split('.');
-      if (parts.length < 2) return null;
-      const payload = parts[1].replace(/-/g, '+').replace(/_/g, '/');
-      const decoded = JSON.parse(decodeURIComponent(escape(atob(payload))));
-      return decoded.faculty_id || decoded.facultyId || decoded.userId || decoded.sub || decoded.id || null;
-    } catch {
-      return null;
-    }
-  };
 
   useEffect(() => {
     let isMounted = true;
@@ -151,7 +133,10 @@ const MentorSchedule: React.FC = () => {
         setLoading(true);
         setError(null);
   
-        const resp = await api.lms.mentors.getFacultyStudents();
+
+        const facultyId = user?.id || '';
+        const resp = await api.lms.adminMentors.getAllSessions(facultyId);
+
         const data = Array.isArray(resp) ? resp : (resp?.data ?? []);
   
         // Map to UiSession
