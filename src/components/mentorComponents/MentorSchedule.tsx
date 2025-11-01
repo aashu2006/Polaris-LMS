@@ -1,10 +1,14 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { Calendar, Plus, Clock, Users, Video, CreditCard as Edit, Trash2, RotateCcw, X, Loader2 } from 'lucide-react';
+import { useApi } from '../../services/api';
 import { useAuth } from '../../contexts/AuthContext';
-
+        
 const LMS_BASE_URL = import.meta.env.VITE_LMS_BASE_URL || 'https://live-class-lms1-672553132888.asia-south1.run.app';
 
 const MentorSchedule: React.FC = () => {
+  const api = useApi();
+  const { user, token } = useAuth();
+  const [selectedDate, setSelectedDate] = useState(new Date());
   const [viewMode, setViewMode] = useState<'week' | 'month'>('week');
   const [rescheduleModal, setRescheduleModal] = useState<{ isOpen: boolean; sessionId: number | null }>({
     isOpen: false,
@@ -16,12 +20,10 @@ const MentorSchedule: React.FC = () => {
     reason: ''
   });
   const [scheduleModal, setScheduleModal] = useState(false);
-  const [loading, setLoading] = useState(false);
   const [batches, setBatches] = useState<any[]>([]);
   const [sections, setSections] = useState<any[]>([]);
   const [programs, setPrograms] = useState<any[]>([]);
   const [selectedBatchId, setSelectedBatchId] = useState('');
-  const { user } = useAuth();
   const [sessionData, setSessionData] = useState({
     section_id: '',
     session_type: 'theory',
@@ -99,45 +101,82 @@ const MentorSchedule: React.FC = () => {
     setSessionData({...sessionData, section_id: ''}); // Reset section when batch changes
   };
 
-  const sessions = [
-    {
-      id: 1,
-      title: 'React Fundamentals - Components & Props',
-      date: '2024-01-15',
-      time: '14:00',
-      duration: 120,
-      students: 8,
-      program: 'Full Stack Development',
-      cohort: '2024-A',
-      status: 'scheduled',
-      recurring: 'weekly'
-    },
-    {
-      id: 2,
-      title: 'State Management with Redux',
-      date: '2024-01-16',
-      time: '10:00',
-      duration: 120,
-      students: 8,
-      program: 'Full Stack Development',
-      cohort: '2024-A',
-      status: 'scheduled',
-      recurring: 'none'
-    },
-    {
-      id: 3,
-      title: 'API Integration & Async Programming',
-      date: '2024-01-17',
-      time: '15:00',
-      duration: 120,
-      students: 6,
-      program: 'Full Stack Development',
-      cohort: '2024-B',
-      status: 'scheduled',
-      recurring: 'none'
-    }
-  ];
+  type UiSession = {
+    id: number;
+    title: string;
+    date: string; // ISO yyyy-mm-dd
+    time: string; // HH:mm
+    duration: number;
+    students: number;
+    program: string;
+    cohort: string;
+    status: string;
+    recurring: 'none' | 'weekly';
+    dateTime: Date; // original datetime for filtering
+  };
 
+  const [sessions, setSessions] = useState<UiSession[]>([]);
+  const [loading, setLoading] = useState<boolean>(true);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let isMounted = true;
+  
+    async function load() {
+      if (!token) {
+        setLoading(false);
+        return;
+      }
+  
+      try {
+        setLoading(true);
+        setError(null);
+  
+        const facultyId = user?.id || '';
+        const resp = await api.lms.adminMentors.getAllSessions(facultyId);
+        const data = Array.isArray(resp) ? resp : (resp?.data ?? []);
+  
+        // Map to UiSession
+        const mapped: UiSession[] = (data as any[]).map((s: any) => {
+          const rawDt = s.session_datetime ?? s.sessionDate ?? s.dateTime ?? s.datetime;
+          const dt = rawDt ? new Date(rawDt) : new Date();
+  
+          const yyyy = dt.getFullYear();
+          const mm = String(dt.getMonth() + 1).padStart(2, '0');
+          const dd = String(dt.getDate()).padStart(2, '0');
+          const hh = String(dt.getHours()).padStart(2, '0');
+          const mi = String(dt.getMinutes()).padStart(2, '0');
+  
+          const rawStatus = (s.status ?? 'scheduled').toString().toLowerCase();
+          const uiStatus = rawStatus === 'upcoming' ? 'scheduled' : rawStatus;
+  
+          return {
+            id: Number(s.session_id ?? s.id ?? Date.now()),
+            title: s.course_name ?? s.title ?? 'Session',
+            date: `${yyyy}-${mm}-${dd}`,
+            time: `${hh}:${mi}`,
+            duration: Number(s.duration ?? s.length ?? 60),
+            students: Number(s.student_count ?? s.students ?? 0),
+            program: s.course_name ?? s.program ?? '',
+            cohort: s.course_code ?? s.cohort ?? '',
+            status: uiStatus,
+            recurring: (s.recurring === 'weekly') ? 'weekly' : 'none',
+            dateTime: dt,
+          } as UiSession;
+        });
+  
+        if (isMounted) setSessions(mapped);
+      } catch (err: any) {
+        if (isMounted) setError(err?.message ?? 'Failed to load sessions');
+      } finally {
+        if (isMounted) setLoading(false);
+      }
+    }
+  
+    load();
+    return () => { isMounted = false; };
+  }, [api, token, user]); 
+  
   const formatTime = (time: string) => {
     const [hours, minutes] = time.split(':');
     const hour = parseInt(hours);
@@ -146,9 +185,46 @@ const MentorSchedule: React.FC = () => {
     return `${displayHour}:${minutes} ${ampm}`;
   };
 
+  // Week/Month filters based on selectedDate and session_datetime
+  const startOfWeek = (d: Date) => {
+    const date = new Date(d);
+    const day = (date.getDay() + 6) % 7; // Mon=0 ... Sun=6
+    date.setHours(0,0,0,0);
+    date.setDate(date.getDate() - day);
+    return date;
+  };
+  const endOfWeek = (d: Date) => {
+    const start = startOfWeek(d);
+    const end = new Date(start);
+    end.setDate(end.getDate() + 7);
+    return end;
+  };
+  const startOfMonth = (d: Date) => {
+    const date = new Date(d.getFullYear(), d.getMonth(), 1);
+    date.setHours(0,0,0,0);
+    return date;
+  };
+  const endOfMonth = (d: Date) => {
+    const date = new Date(d.getFullYear(), d.getMonth() + 1, 1);
+    date.setHours(0,0,0,0);
+    return date;
+  };
+
+  const visibleSessions = useMemo(() => {
+    if (!sessions.length) return [] as UiSession[];
+    if (viewMode === 'week') {
+      const start = startOfWeek(selectedDate);
+      const end = endOfWeek(selectedDate);
+      return sessions.filter(s => s.dateTime >= start && s.dateTime < end);
+    } else {
+      const start = startOfMonth(selectedDate);
+      const end = endOfMonth(selectedDate);
+      return sessions.filter(s => s.dateTime >= start && s.dateTime < end);
+    }
+  }, [sessions, viewMode, selectedDate]);
+
   const handleReschedule = (sessionId: number) => {
     setRescheduleModal({ isOpen: true, sessionId });
-    // Pre-fill with current session data
     const session = sessions.find(s => s.id === sessionId);
     if (session) {
       setRescheduleData({
@@ -160,7 +236,6 @@ const MentorSchedule: React.FC = () => {
   };
 
   const submitReschedule = () => {
-    // Here you would make the API call to reschedule the session
     console.log('Rescheduling session:', rescheduleModal.sessionId, rescheduleData);
     setRescheduleModal({ isOpen: false, sessionId: null });
     setRescheduleData({ date: '', time: '', reason: '' });
@@ -233,10 +308,16 @@ const MentorSchedule: React.FC = () => {
   const getStatusColor = (status: string) => {
     switch (status) {
       case 'scheduled':
+      case 'upcoming':
         return 'bg-blue-100 text-blue-800 border-blue-200';
       case 'completed':
         return 'bg-green-100 text-green-800 border-green-200';
       case 'cancelled':
+        return 'bg-red-100 text-red-800 border-red-200';
+      case 'postponed':
+      case 'rescheduled':
+        return 'bg-yellow-100 text-yellow-900 border-yellow-200';
+      case 'live':
         return 'bg-red-100 text-red-800 border-red-200';
       default:
         return 'bg-gray-100 text-gray-800 border-gray-200';
@@ -282,7 +363,7 @@ const MentorSchedule: React.FC = () => {
       {/* Calendar Header */}
       <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
         <div className="flex items-center justify-between mb-6">
-          <h2 className="text-xl font-bold text-gray-900">January 2024</h2>
+          <h2 className="text-xl font-bold text-gray-900">{selectedDate.toLocaleDateString(undefined, { month: 'long', year: 'numeric' })}</h2>
           <div className="flex items-center space-x-2">
             <button className="p-2 text-gray-400 hover:text-gray-600 transition-colors duration-200">
               <Calendar className="h-5 w-5" />
@@ -292,7 +373,13 @@ const MentorSchedule: React.FC = () => {
 
         {/* Sessions List */}
         <div className="space-y-4">
-          {sessions.map((session) => (
+          {loading && (
+            <div className="text-gray-500">Loading sessions...</div>
+          )}
+          {error && (
+            <div className="text-red-600">{error}</div>
+          )}
+          {!loading && !error && visibleSessions.map((session) => (
             <div key={session.id} className="border border-gray-200 rounded-lg p-4 hover:shadow-md transition-shadow duration-200">
               <div className="flex items-start justify-between">
                 <div className="flex-1">
@@ -369,6 +456,7 @@ const MentorSchedule: React.FC = () => {
             <input
               type="date"
               className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-yellow-400 focus:border-transparent"
+              onChange={(e) => setSelectedDate(new Date(e.target.value))}
             />
           </div>
           <div>
