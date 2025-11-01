@@ -1,12 +1,10 @@
 import React, { useState, useEffect } from 'react';
-import { Calendar, Plus, Clock, Users, Video, CreditCard as Edit, Trash2, RotateCcw, X, MapPin, Loader2 } from 'lucide-react';
-import { useApi } from '../../services/api';
+import { Calendar, Plus, Clock, Users, Video, CreditCard as Edit, Trash2, RotateCcw, X, Loader2 } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 
-const LMS_BASE_URL = 'https://live-class-lms1-672553132888.asia-south1.run.app';
+const LMS_BASE_URL = import.meta.env.VITE_LMS_BASE_URL || 'https://live-class-lms1-672553132888.asia-south1.run.app';
 
 const MentorSchedule: React.FC = () => {
-  const [selectedDate, setSelectedDate] = useState(new Date());
   const [viewMode, setViewMode] = useState<'week' | 'month'>('week');
   const [rescheduleModal, setRescheduleModal] = useState<{ isOpen: boolean; sessionId: number | null }>({
     isOpen: false,
