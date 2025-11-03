@@ -186,11 +186,7 @@ const MentorStudents: React.FC = () => {
                   </div>
                   <div className="flex items-center space-x-2">
                     <button 
-                      onClick={() => {
-                        console.log('Button clicked, session object:', session);
-                        console.log('Session ID to pass:', session.session_id || session.id);
-                        openFeedbackModal(session.session_id || session.id);
-                      }}
+                      onClick={() => openFeedbackModal(session.session_id || (session as any).id)}
                       className="flex items-center space-x-2 bg-[#FFC540] text-black px-4 py-2 rounded-lg hover:bg-[#e6b139] transition-colors duration-200"
                     >
                       <Plus className="h-4 w-4" />
@@ -256,7 +252,8 @@ const StudentSelectionModal: React.FC<StudentSelectionModalProps> = ({
     documents: [] as File[]
   });
 
-  const session = sessions.find(s => s.session_id === sessionId);
+  // Try to find session with both session_id and id properties
+  const session = sessions.find(s => s.session_id === sessionId || (s as any).id === sessionId);
 
   // Fetch students when modal opens
   useEffect(() => {
@@ -277,7 +274,8 @@ const StudentSelectionModal: React.FC<StudentSelectionModalProps> = ({
       const sessionsData = response.data || [];
       console.log('Sessions data:', sessionsData);
       
-      const currentSession = sessionsData.find((s: any) => s.session_id === sessionId);
+      // Try both session_id and id properties
+      const currentSession = sessionsData.find((s: any) => s.session_id === sessionId || s.id === sessionId);
       console.log('Current session found:', currentSession);
       
       if (currentSession && currentSession.students) {
@@ -410,7 +408,6 @@ const StudentSelectionModal: React.FC<StudentSelectionModalProps> = ({
                   {sessionStudents.map((student, index) => (
                     <div
                       key={`student-${student.enrollment_id}-${index}`}
-                      key={student.enrollment_id}
                       onClick={() => handleStudentSelect(student)}
                       className="bg-gray-700 rounded-lg p-4 cursor-pointer hover:bg-gray-600 transition-colors duration-200"
                     >
