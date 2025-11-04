@@ -1,5 +1,6 @@
 import { useState } from 'react';
-import { Calendar, Video, FileText, Github, Award, Clock, Users, BookOpen, PlayCircle, CheckCircle, AlertCircle, Upload, File, X, Mail, Phone, Briefcase } from 'lucide-react';
+import { Calendar, Video, FileText, Github, Award, Clock, User, Users, BookOpen, PlayCircle, CheckCircle, AlertCircle, Upload, File, X, Mail, Phone, Briefcase, LogOut, ChevronDown, Settings } from 'lucide-react';
+import { useAuth } from '../../contexts/AuthContext';
 
 interface UpcomingClass {
   id: string;
@@ -60,8 +61,10 @@ interface MentorInfo {
 }
 
 const StudentProfile = () => {
+  const { logout, user } = useAuth();
   const [activeTab, setActiveTab] = useState<'overview' | 'schedule' | 'recordings' | 'assignments' | 'contributions'>('overview');
   const [showUploadModal, setShowUploadModal] = useState(false);
+  const [showProfileMenu, setShowProfileMenu] = useState(false);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [selectedProgram, setSelectedProgram] = useState('React.js');
   const [selectedFileType, setSelectedFileType] = useState('Assignment');
@@ -114,6 +117,10 @@ const StudentProfile = () => {
 
   const handleDeleteFile = (fileId: string) => {
     setUploadedFiles(uploadedFiles.filter(file => file.id !== fileId));
+  };
+
+  const handleLogout = () => {
+    logout();
   };
 
   const mentorInfo: MentorInfo = {
@@ -261,21 +268,7 @@ const StudentProfile = () => {
               <div className="w-8 h-8 rounded-lg bg-[#FFC540] flex items-center justify-center">
                 <span className="text-black font-bold text-sm">P</span>
               </div>
-              <span className="text-white font-bold text-lg">Plarislabs <span className="text-gray-500 text-sm">2.0</span></span>
-            </div>
-            <div className="flex gap-4">
-              <button className="px-4 py-2 bg-[#FFC540] text-black rounded-lg font-medium text-sm">
-                Programs
-              </button>
-              <button className="px-4 py-2 text-gray-400 hover:text-white font-medium text-sm">
-                Mentors
-              </button>
-              <button className="px-4 py-2 text-gray-400 hover:text-white font-medium text-sm">
-                Students
-              </button>
-              <button className="px-4 py-2 text-gray-400 hover:text-white font-medium text-sm">
-                Reports
-              </button>
+              <span className="text-white font-bold text-lg">Polaris Labs <span className="text-gray-500 text-sm">2.0</span></span>
             </div>
           </div>
           <div className="flex items-center gap-4">
@@ -296,8 +289,52 @@ const StudentProfile = () => {
                 </div>
               </button>
             </div>
-            <div className="w-8 h-8 rounded-full bg-gray-600 flex items-center justify-center">
-              <Users className="w-4 h-4 text-white" />
+            
+            {/* Profile Menu */}
+            <div className="relative">
+              <button
+                onClick={() => setShowProfileMenu(!showProfileMenu)}
+                className="flex items-center space-x-2 hover:bg-gray-700 rounded-lg px-2 py-1 transition-colors duration-200"
+              >
+                <div className="w-8 h-8 bg-[#FFC540] rounded-full flex items-center justify-center">
+                  <User className="w-4 h-4 text-black" />
+                </div>
+                <ChevronDown className="w-4 h-4 text-gray-400" />
+              </button>
+
+              {/* Dropdown Menu */}
+              {showProfileMenu && (
+                <>
+                  {/* Backdrop to close dropdown */}
+                  <div
+                    className="fixed inset-0 z-10"
+                    onClick={() => setShowProfileMenu(false)}
+                  />
+                  
+                  <div className="absolute right-0 mt-2 w-64 bg-gray-800 border border-gray-700 rounded-lg shadow-lg z-20">
+                    <div className="px-4 py-3 border-b border-gray-700">
+                      <p className="text-sm font-semibold text-white">{user?.name || studentData.name}</p>
+                      <p className="text-xs text-gray-400">{user?.email || studentData.email}</p>
+                    </div>
+                    
+                    <div className="py-2">
+                      <button
+                        className="w-full flex items-center space-x-3 px-4 py-2 text-left text-gray-300 hover:bg-gray-700 hover:text-white transition-colors duration-200"
+                      >
+                        <Settings className="h-4 w-4" />
+                        <span>Settings</span>
+                      </button>
+                      <button
+                        onClick={handleLogout}
+                        className="w-full flex items-center space-x-3 px-4 py-2 text-left text-gray-300 hover:bg-gray-700 hover:text-white transition-colors duration-200"
+                      >
+                        <LogOut className="h-4 w-4" />
+                        <span>Logout</span>
+                      </button>
+                    </div>
+                  </div>
+                </>
+              )}
             </div>
           </div>
         </div>
