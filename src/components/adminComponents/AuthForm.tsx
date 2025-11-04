@@ -1,7 +1,6 @@
 import React, { useState } from 'react';
 import { ArrowRight, Eye, EyeOff, Mail, Lock, User } from 'lucide-react';
-
-const UMS_BASE_URL = 'https://ums-672553132888.asia-south1.run.app'
+import { publicAuthApi } from '../../services/api';
 
 interface AuthFormProps {
   userType: 'student' | 'faculty' | 'admin';
@@ -32,9 +31,9 @@ const AuthForm: React.FC<AuthFormProps> = ({ userType, onLogin }) => {
         return {
           title: 'Student Portal',
           description: 'Access your courses, assignments, and track your learning progress.',
-          emailRestriction: 'Students must use @medhaviskillsuniversity.edu.in email addresses',
+          emailRestriction: 'Students can use email/password or Google authentication',
           allowSignup: false,
-          googleOnly: true,
+          googleOnly: false,
           allowGoogleAuth: true
         };
       case 'faculty':
@@ -65,36 +64,32 @@ const AuthForm: React.FC<AuthFormProps> = ({ userType, onLogin }) => {
     setLoading(true);
     setError('');
     try {
-      let endpoint = '';
       let testEmail = '';
+      let authFunction: (token: string) => Promise<{ user: any; token: string | null }>;
+
       switch (userType) {
         case 'student':
-          endpoint = '/student/login';
           testEmail = 'nitish.p24@medhaviskillsuniversity.edu.in';
+          authFunction = publicAuthApi.studentGoogleLogin;
           break;
         case 'faculty':
-          endpoint = '/faculty/login';
           testEmail = 'ananya.sharma@polariscampus.com';
+          authFunction = publicAuthApi.facultyGoogleLogin;
           break;
         case 'admin':
-          endpoint = '/login';
           testEmail = 'kshitiz.dhooria@classplus.co';
+          authFunction = publicAuthApi.adminGoogleLogin;
           break;
       }
 
-      const requestBody = { token: `mock_google_token_for_${testEmail}` };
-      const response = await fetch(`${UMS_BASE_URL}/ums/api/auth${endpoint}`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(requestBody)
-      });
+      const mockToken = `mock_google_token_for_${testEmail}`;
+      const result = await authFunction(mockToken);
 
-      const data = await response.json();
-      if (!response.ok) throw new Error(data.message || 'Google authentication failed');
-
-      const token = response.headers.get('x-access-token');
-      if (token) onLogin(data.user, token);
-      else throw new Error('No authentication token received');
+      if (result.token) {
+        onLogin(result.user, result.token);
+      } else {
+        throw new Error('No authentication token received');
+      }
     } catch (err: any) {
       setError(err.message || 'Google authentication failed');
     } finally {
@@ -108,26 +103,19 @@ const AuthForm: React.FC<AuthFormProps> = ({ userType, onLogin }) => {
     setLoading(true);
     setError('');
 
-    if (userType === 'student') {
-      setError('Students must use Google OAuth. Please use the "Continue with Google" button.');
-      setLoading(false);
-      return;
-    }
-
-    const endpoint = userType === 'faculty' ? '/faculty/email-login' : '/login';
     try {
-      const response = await fetch(`${UMS_BASE_URL}/ums/api/auth${endpoint}`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email: formData.email, password: formData.password })
-      });
+      const credentials = { email: formData.email, password: formData.password };
+      
+      // Use appropriate auth function based on user type
+      const result = userType === 'faculty' 
+        ? await publicAuthApi.facultyEmailLogin(credentials)
+        : await publicAuthApi.login(credentials);
 
-      const data = await response.json();
-      if (!response.ok) throw new Error(data.message || 'Login failed');
-
-      const token = response.headers.get('x-access-token');
-      if (token) onLogin(data.user, token);
-      else throw new Error('No authentication token received');
+      if (result.token) {
+        onLogin(result.user, result.token);
+      } else {
+        throw new Error('No authentication token received');
+      }
     } catch (err: any) {
       setError(err.message || 'Login failed');
     } finally {
@@ -203,6 +191,18 @@ const AuthForm: React.FC<AuthFormProps> = ({ userType, onLogin }) => {
             </svg>
             Continue with Google
           </button>
+        </div>
+      )}
+
+      {/* Divider */}
+      {!info.googleOnly && info.allowGoogleAuth && (
+        <div className="relative mb-6">
+          <div className="absolute inset-0 flex items-center">
+            <div className="w-full border-t border-gray-700"></div>
+          </div>
+          <div className="relative flex justify-center text-sm">
+            <span className="px-2 bg-gray-900 text-gray-400">Or continue with email</span>
+          </div>
         </div>
       )}
 
