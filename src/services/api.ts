@@ -337,11 +337,99 @@ const umsApi = {
 
   // Auth
   auth: {
+    // Email/Password Login
     login: async (credentials: any) => {
-      return apiRequest(`${UMS_BASE_URL}/api/auth/login`, {
+      const response = await fetch(`${UMS_BASE_URL}/ums/api/auth/login`, {
         method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(credentials),
       });
+      
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.message || 'Login failed');
+      }
+      
+      const data = await response.json();
+      const token = response.headers.get('x-access-token');
+      
+      return { user: data.user, token };
+    },
+
+    // Google OAuth Login - Student
+    studentGoogleLogin: async (token: string) => {
+      const response = await fetch(`${UMS_BASE_URL}/ums/api/auth/student/login`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ token }),
+      });
+      
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.message || 'Google login failed');
+      }
+      
+      const data = await response.json();
+      const accessToken = response.headers.get('x-access-token');
+      
+      return { user: data.user, token: accessToken };
+    },
+
+    // Google OAuth Login - Faculty
+    facultyGoogleLogin: async (token: string) => {
+      const response = await fetch(`${UMS_BASE_URL}/ums/api/auth/faculty/login`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ token }),
+      });
+      
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.message || 'Google login failed');
+      }
+      
+      const data = await response.json();
+      const accessToken = response.headers.get('x-access-token');
+      
+      return { user: data.user, token: accessToken };
+    },
+
+    // Google OAuth Login - Admin
+    adminGoogleLogin: async (token: string) => {
+      const response = await fetch(`${UMS_BASE_URL}/ums/api/auth/login`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ token }),
+      });
+      
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.message || 'Google login failed');
+      }
+      
+      const data = await response.json();
+      const accessToken = response.headers.get('x-access-token');
+      
+      return { user: data.user, token: accessToken };
+    },
+
+    // Faculty Email Login
+    facultyEmailLogin: async (credentials: any) => {
+      const response = await fetch(`${UMS_BASE_URL}/ums/api/auth/faculty/email-login`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(credentials),
+      });
+      
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.message || 'Login failed');
+      }
+      
+      const data = await response.json();
+      const token = response.headers.get('x-access-token');
+      
+      return { user: data.user, token };
     },
 
     refresh: async (refreshToken: string) => {
@@ -473,6 +561,26 @@ const lmsApi = {
       return lmsApiRequest(`${LMS_BASE_URL}/api/v1/mentor/cards/submit-feedback`, {
         method: 'POST',
         body: JSON.stringify(feedbackData),
+        headers: { 'Content-Type': 'application/json' },
+      }, token);
+    },
+
+    getBatches: async (token: string) => {
+      return lmsApiRequest(`${LMS_BASE_URL}/api/v1/mentor/cards/batches`, {
+        method: 'GET',
+      }, token);
+    },
+
+    getSections: async (batchId: string, token: string) => {
+      return lmsApiRequest(`${LMS_BASE_URL}/api/v1/mentor/cards/sections/${batchId}`, {
+        method: 'GET',
+      }, token);
+    },
+
+    addSession: async (sessionData: any, token: string) => {
+      return lmsApiRequest(`${LMS_BASE_URL}/api/v1/mentor/cards/Addsessions`, {
+        method: 'POST',
+        body: JSON.stringify(sessionData),
         headers: { 'Content-Type': 'application/json' },
       }, token);
     },
@@ -914,6 +1022,9 @@ export const useApi = () => {
         getTotalCourses: () => lmsApi.mentors.getTotalCourses(token),
         getAvgAttendance: () => lmsApi.mentors.getAvgAttendance(token),
         submitFeedback: (feedbackData: any) => lmsApi.mentors.submitFeedback(feedbackData, token),
+        getBatches: () => lmsApi.mentors.getBatches(token),
+        getSections: (batchId: string) => lmsApi.mentors.getSections(batchId, token),
+        addSession: (sessionData: any) => lmsApi.mentors.addSession(sessionData, token),
       },
       assignments: {
         getAll: () => lmsApi.assignments.getAll(token),
@@ -993,6 +1104,9 @@ export const useApi = () => {
 
   return apiFunctions;
 };
+
+// Export public auth functions (don't require authentication)
+export const publicAuthApi = umsApi.auth;
 
 export default {
   ums: umsApi,

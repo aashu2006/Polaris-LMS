@@ -113,20 +113,6 @@ const UpcomingSessions: React.FC = () => {
           throw new Error('Missing faculty id');
         }
 
-        const url = await api.lms.mentors.getAllSessions(facultyId);
-
-        const res = await fetch(url, {
-          method: 'GET',
-          headers: {
-            'Authorization': `Bearer ${token}`,
-          },
-        });
-      
-        if (!res.ok) {
-          const text = await res.text();
-          throw new Error(`HTTP ${res.status}: ${text}`);
-        }
-        
         const json = await api.lms.mentors.getAllSessions(facultyId);
         const data: ApiSession[] = json?.data ?? [];
 

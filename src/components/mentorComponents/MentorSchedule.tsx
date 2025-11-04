@@ -2,8 +2,6 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { Calendar, Plus, Clock, Users, Video, CreditCard as Edit, Trash2, RotateCcw, X, Loader2 } from 'lucide-react';
 import { useApi } from '../../services/api';
 import { useAuth } from '../../contexts/AuthContext';
-        
-const LMS_BASE_URL = import.meta.env.VITE_LMS_BASE_URL || 'https://live-class-lms1-672553132888.asia-south1.run.app';
 
 const MentorSchedule: React.FC = () => {
   const api = useApi();
@@ -54,12 +52,7 @@ const MentorSchedule: React.FC = () => {
 
   const fetchBatches = async () => {
     try {
-      const response = await fetch(`${LMS_BASE_URL}/api/v1/mentor/cards/batches`, {
-        headers: {
-          'Authorization': `Bearer ${localStorage.getItem('accessToken')}`
-        }
-      });
-      const data = await response.json();
+      const data = await api.lms.mentors.getBatches();
       setBatches(data.batches || []);
     } catch (error) {
       console.error('Error fetching batches:', error);
@@ -68,12 +61,7 @@ const MentorSchedule: React.FC = () => {
 
   const fetchPrograms = async () => {
     try {
-      const response = await fetch(`${LMS_BASE_URL}/api/v1/admin/mentors/getAllCourses`, {
-        headers: {
-          'Authorization': `Bearer ${localStorage.getItem('accessToken')}`
-        }
-      });
-      const data = await response.json();
+      const data = await api.lms.adminMentors.getAllCourses();
       setPrograms(data.courses || []);
     } catch (error) {
       console.error('Error fetching programs:', error);
@@ -82,12 +70,7 @@ const MentorSchedule: React.FC = () => {
 
   const fetchSections = async (batchId: string) => {
     try {
-      const response = await fetch(`${LMS_BASE_URL}/api/v1/mentor/cards/sections/${batchId}`, {
-        headers: {
-          'Authorization': `Bearer ${localStorage.getItem('accessToken')}`
-        }
-      });
-      const data = await response.json();
+      const data = await api.lms.mentors.getSections(batchId);
       // API returns array directly, not wrapped in object
       setSections(Array.isArray(data) ? data : data.sections || []);
     } catch (error) {
@@ -276,28 +259,17 @@ const MentorSchedule: React.FC = () => {
     try {
       setLoading(true);
       
-      const response = await fetch(`${LMS_BASE_URL}/api/v1/mentor/cards/Addsessions`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${localStorage.getItem('accessToken')}`
-        },
-        body: JSON.stringify({
-          section_id: parseInt(sessionData.section_id),
-          faculty_id: user?.id,
-          session_type: sessionData.session_type,
-          start_date: sessionData.start_date,
-          class_time: sessionData.class_time,
-          duration: sessionData.duration,
-          venue: sessionData.venue
-        })
-      });
+      const sessionPayload = {
+        section_id: parseInt(sessionData.section_id),
+        faculty_id: user?.id,
+        session_type: sessionData.session_type,
+        start_date: sessionData.start_date,
+        class_time: sessionData.class_time,
+        duration: sessionData.duration,
+        venue: sessionData.venue
+      };
 
-      const data = await response.json();
-      
-      if (!response.ok) {
-        throw new Error(data.message || data.error || 'Failed to schedule session');
-      }
+      await api.lms.mentors.addSession(sessionPayload);
 
       alert('Session scheduled successfully!');
       closeScheduleModal();
