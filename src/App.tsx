@@ -3,6 +3,7 @@ import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-d
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { StudentPage, FacultyPage, AdminPage, Dashboard, Landing } from './pages';
 import MentorDashboard from './components/mentorComponents/MentorDashboard';
+import StudentProfile from './components/studentComponents/StudentProfile';
 
 const ProtectedRoute: React.FC<{ children: React.ReactNode; redirectTo: string }> = ({ children, redirectTo }) => {
   const { isAuthenticated, loading } = useAuth();
@@ -47,7 +48,12 @@ const RoleDashboard: React.FC = () => {
   // Show dashboard based on user role
   const userRole = user?.userType === 'faculty' ? 'mentor' : user?.userType;
   
-  return userRole === 'admin' ? <Dashboard /> : <MentorDashboard />;
+  if (userRole === 'admin') return <Dashboard />;
+  if (userRole === 'mentor') return <MentorDashboard />;
+  if (userRole === 'student') return <StudentProfile />;
+  
+  // Default fallback
+  return <Navigate to="/admin/login" replace />;
 };
 
 const StudentPageWithAuth: React.FC = () => {
@@ -71,10 +77,14 @@ const FacultyPageWithAuth: React.FC = () => {
 };
 
 const LandingWithAuth: React.FC = () => {
-  const { login, isAuthenticated } = useAuth();
+  const { login, isAuthenticated, user } = useAuth();
 
-  if (isAuthenticated) {
-    return <Navigate to="/admin/dashboard" replace />;
+  if (isAuthenticated && user) {
+    // Redirect to appropriate dashboard based on user role
+    const userRole = user.userType === 'faculty' ? 'mentor' : user.userType;
+    if (userRole === 'admin') return <Navigate to="/admin/dashboard" replace />;
+    if (userRole === 'mentor') return <Navigate to="/faculty/dashboard" replace />;
+    if (userRole === 'student') return <Navigate to="/student/dashboard" replace />;
   }
 
   return <Landing onLogin={login} />;
