@@ -1,5 +1,6 @@
-import { useState } from 'react';
-import { Calendar, Video, FileText, Github, Award, Clock, User, Users, BookOpen, PlayCircle, CheckCircle, AlertCircle, Upload, File, X, Mail, Phone, Briefcase, LogOut, ChevronDown, Settings } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { Calendar, Video, FileText, Github, Award, Clock, Users, BookOpen, PlayCircle, CheckCircle, AlertCircle, Upload, File, X, Mail, Phone, Briefcase, User, ChevronDown, LogOut, Settings } from 'lucide-react';
+import { useApi } from '../../services/api';
 import { useAuth } from '../../contexts/AuthContext';
 
 interface UpcomingClass {
@@ -10,9 +11,10 @@ interface UpcomingClass {
   date: string;
   time: string;
   duration: string;
-  status: 'upcoming' | 'live' | 'completed';
+  status: 'upcoming' | 'live' | 'completed' | 'postponed';
   rescheduled?: boolean;
   originalDate?: string;
+  epoch?: number; // timestamp for sorting/filtering
 }
 
 interface Recording {
@@ -61,10 +63,11 @@ interface MentorInfo {
 }
 
 const StudentProfile = () => {
-  const { logout, user } = useAuth();
+  const api = useApi();
+  const { user, logout } = useAuth();
+  const [showUserDropdown, setShowUserDropdown] = useState(false);
   const [activeTab, setActiveTab] = useState<'overview' | 'schedule' | 'recordings' | 'assignments' | 'contributions'>('overview');
   const [showUploadModal, setShowUploadModal] = useState(false);
-  const [showProfileMenu, setShowProfileMenu] = useState(false);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [selectedProgram, setSelectedProgram] = useState('React.js');
   const [selectedFileType, setSelectedFileType] = useState('Assignment');
@@ -86,6 +89,17 @@ const StudentProfile = () => {
       program: 'Node.js',
     },
   ]);
+
+  // Schedule state
+  const [allClasses, setAllClasses] = useState<UpcomingClass[]>([]);
+  const [loadingClasses, setLoadingClasses] = useState<boolean>(true);
+  const [classesError, setClassesError] = useState<string | null>(null);
+
+  // Pagination state
+  const [upcomingPage, setUpcomingPage] = useState<number>(1);
+  const [upcomingPageSize] = useState<number>(5);
+  const [schedulePage, setSchedulePage] = useState<number>(1);
+  const [schedulePageSize] = useState<number>(10);
 
   const handleFileSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
     if (event.target.files && event.target.files[0]) {
@@ -119,13 +133,125 @@ const StudentProfile = () => {
     setUploadedFiles(uploadedFiles.filter(file => file.id !== fileId));
   };
 
-  const handleLogout = () => {
-    logout();
-  };
+  // Fetch class schedule from API
+  useEffect(() => {
+    let mounted = true;
+    const fetchClassSchedule = async () => {
+      try {
+        setLoadingClasses(true);
+        setClassesError(null);
+        const response = await api.lms.students.getClassSchedule();
+        console.log("response: ", response );
+
+        if (response && response.success === false) {
+          throw new Error(response.error || 'Failed to fetch class schedule');
+        }
+        const data = (response && Array.isArray(response)) ? response : (response?.data || []);
+        
+        // Map API response to UpcomingClass format
+        const mapped: UpcomingClass[] = data.map((s: any) => {
+          const dt = s.session_datetime ? new Date(s.session_datetime) : null;
+          const today = new Date();
+          today.setHours(0, 0, 0, 0);
+          const sessionDate = dt ? new Date(dt) : null;
+          if (sessionDate) {
+            sessionDate.setHours(0, 0, 0, 0);
+          }
+          
+          // Format date display
+          let dateDisplay = '';
+          if (dt) {
+            const now = new Date();
+            const sessionTime = dt.getTime();
+            const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+            const tomorrowStart = todayStart + 24 * 60 * 60 * 1000;
+            
+            if (sessionTime >= todayStart && sessionTime < tomorrowStart) {
+              dateDisplay = 'Today';
+            } else if (sessionTime >= tomorrowStart && sessionTime < tomorrowStart + 24 * 60 * 60 * 1000) {
+              dateDisplay = 'Tomorrow';
+            } else {
+              dateDisplay = dt.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+            }
+          }
+          
+          // Format time display
+          const timeDisplay = dt ? dt.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true }) : '';
+          
+          // Determine status
+          const rawStatus = (s.status || '').toLowerCase();
+          let status: UpcomingClass['status'] = 'completed';
+          if (rawStatus === 'upcoming' || rawStatus === 'scheduled') {
+            status = 'upcoming';
+          } else if (rawStatus === 'live') {
+            status = 'live';
+          } else if (rawStatus === 'postponed') {
+            status = 'postponed';
+          }
+          
+          return {
+            id: String(s.session_id || s.id || Date.now()),
+            title: s.course_name || 'Session',
+            mentor: s.faculty_name || '',
+            program: s.course_name || '',
+            date: dateDisplay,
+            time: timeDisplay,
+            duration: `${s.duration || 60} min`,
+            status,
+            rescheduled: rawStatus === 'postponed',
+            epoch: dt ? dt.getTime() : 0,
+          } as UpcomingClass;
+        });
+        
+        if (mounted) {
+          setAllClasses(mapped);
+        }
+      } catch (error: any) {
+        if (mounted) {
+          setClassesError(error?.message || 'Failed to load class schedule');
+        }
+      } finally {
+        if (mounted) {
+          setLoadingClasses(false);
+        }
+      }
+    };
+
+    fetchClassSchedule();
+    return () => { mounted = false; };
+  }, [api.lms.students]);
+
+  // Filter and paginate upcoming classes (session_datetime >= today)
+  const todayStart = new Date();
+  todayStart.setHours(0, 0, 0, 0);
+  const todayTimestamp = todayStart.getTime();
+  
+  const upcomingOnly = allClasses
+    .filter(c => c.epoch && c.epoch >= todayTimestamp)
+    .sort((a, b) => (a.epoch || 0) - (b.epoch || 0));
+  
+  const upcomingTotalPages = Math.max(1, Math.ceil(upcomingOnly.length / upcomingPageSize));
+  const upcomingSlice = upcomingOnly.slice(
+    (upcomingPage - 1) * upcomingPageSize,
+    upcomingPage * upcomingPageSize
+  );
+
+  // Paginate all classes for schedule tab
+  const allClassesSorted = [...allClasses].sort((a, b) => (a.epoch || 0) - (b.epoch || 0));
+  const scheduleTotalPages = Math.max(1, Math.ceil(allClassesSorted.length / schedulePageSize));
+  const scheduleSlice = allClassesSorted.slice(
+    (schedulePage - 1) * schedulePageSize,
+    schedulePage * schedulePageSize
+  );
+
+  const goPrevUpcoming = () => setUpcomingPage(p => Math.max(1, p - 1));
+  const goNextUpcoming = () => setUpcomingPage(p => Math.min(upcomingTotalPages, p + 1));
+  const goPrevSchedule = () => setSchedulePage(p => Math.max(1, p - 1));
+  const goNextSchedule = () => setSchedulePage(p => Math.min(scheduleTotalPages, p + 1));
 
   const mentorInfo: MentorInfo = {
     name: 'Sarah Mitchell',
-    photo: 'https://images.pexels.com/photos/774909/pexels-photo-774909.jpeg?auto=compress&cs=tinysrgb&w=400',
+    photo: 'https://storage.googleapis.com/polaris-tech_cloudbuild/image_Mentor.jpg',
     email: 'sarah.mitchell@academy.com',
     phone: '+1 (555) 123-4567',
     department: 'Frontend Development',
@@ -145,40 +271,6 @@ const StudentProfile = () => {
     githubContributions: 45,
   };
 
-  const upcomingClasses: UpcomingClass[] = [
-    {
-      id: '1',
-      title: 'Advanced React Patterns',
-      mentor: 'Sarah Mitchell',
-      program: 'React.js',
-      date: 'Today',
-      time: '2:00 PM',
-      duration: '90 min',
-      status: 'live',
-    },
-    {
-      id: '2',
-      title: 'Node.js Microservices',
-      mentor: 'James Cooper',
-      program: 'Node.js',
-      date: 'Tomorrow',
-      time: '10:00 AM',
-      duration: '120 min',
-      status: 'upcoming',
-      rescheduled: true,
-      originalDate: 'Today',
-    },
-    {
-      id: '3',
-      title: 'Python Data Structures',
-      mentor: 'Emily Zhang',
-      program: 'Python',
-      date: 'Oct 5, 2025',
-      time: '3:00 PM',
-      duration: '90 min',
-      status: 'upcoming',
-    },
-  ];
 
   const recordings: Recording[] = [
     {
@@ -268,7 +360,21 @@ const StudentProfile = () => {
               <div className="w-8 h-8 rounded-lg bg-[#FFC540] flex items-center justify-center">
                 <span className="text-black font-bold text-sm">P</span>
               </div>
-              <span className="text-white font-bold text-lg">Polaris Labs <span className="text-gray-500 text-sm">2.0</span></span>
+              <span className="text-white font-bold text-lg">Plarislabs <span className="text-gray-500 text-sm">2.0</span></span>
+            </div>
+            <div className="flex gap-4">
+              <button className="px-4 py-2 bg-[#FFC540] text-black rounded-lg font-medium text-sm">
+                Programs
+              </button>
+              <button className="px-4 py-2 text-gray-400 hover:text-white font-medium text-sm">
+                Mentors
+              </button>
+              <button className="px-4 py-2 text-gray-400 hover:text-white font-medium text-sm">
+                Students
+              </button>
+              <button className="px-4 py-2 text-gray-400 hover:text-white font-medium text-sm">
+                Reports
+              </button>
             </div>
           </div>
           <div className="flex items-center gap-4">
@@ -289,32 +395,34 @@ const StudentProfile = () => {
                 </div>
               </button>
             </div>
-            
-            {/* Profile Menu */}
+            {/* User Profile Dropdown */}
             <div className="relative">
               <button
-                onClick={() => setShowProfileMenu(!showProfileMenu)}
-                className="flex items-center space-x-2 hover:bg-gray-700 rounded-lg px-2 py-1 transition-colors duration-200"
+                onClick={() => setShowUserDropdown(!showUserDropdown)}
+                className="flex items-center space-x-2 hover:bg-gray-800/50 rounded-lg px-3 py-2 transition-colors duration-200"
+                aria-haspopup="true"
+                aria-expanded={showUserDropdown}
               >
                 <div className="w-8 h-8 bg-[#FFC540] rounded-full flex items-center justify-center">
                   <User className="w-4 h-4 text-black" />
                 </div>
-                <ChevronDown className="w-4 h-4 text-gray-400" />
+                <ChevronDown className={`w-4 h-4 text-gray-400 transition-transform ${showUserDropdown ? 'rotate-180' : ''}`} />
               </button>
 
+
               {/* Dropdown Menu */}
-              {showProfileMenu && (
+              {showUserDropdown && (
                 <>
                   {/* Backdrop to close dropdown */}
                   <div
                     className="fixed inset-0 z-10"
-                    onClick={() => setShowProfileMenu(false)}
+                    onClick={() => setShowUserDropdown(false)}
                   />
                   
-                  <div className="absolute right-0 mt-2 w-64 bg-gray-800 border border-gray-700 rounded-lg shadow-lg z-20">
+                  <div className="absolute right-0 mt-2 w-64 bg-[#1a2332] border border-gray-700 rounded-lg shadow-lg z-20">
                     <div className="px-4 py-3 border-b border-gray-700">
-                      <p className="text-sm font-semibold text-white">{user?.name || studentData.name}</p>
-                      <p className="text-xs text-gray-400">{user?.email || studentData.email}</p>
+                      <p className="text-sm font-semibold text-white">{user?.name || 'Student'}</p>
+                      <p className="text-xs text-gray-400">{user?.email || ''}</p>
                     </div>
                     
                     <div className="py-2">
@@ -325,7 +433,7 @@ const StudentProfile = () => {
                         <span>Settings</span>
                       </button>
                       <button
-                        onClick={handleLogout}
+                        onClick={logout}
                         className="w-full flex items-center space-x-3 px-4 py-2 text-left text-gray-300 hover:bg-gray-700 hover:text-white transition-colors duration-200"
                       >
                         <LogOut className="h-4 w-4" />
@@ -342,7 +450,7 @@ const StudentProfile = () => {
 
       <div className="max-w-7xl mx-auto px-8 py-8">
         <div className="mb-8">
-          <h1 className="text-4xl font-bold text-white mb-2">Welcome back, {studentData.name.split(' ')[0]}</h1>
+          <h1 className="text-4xl font-bold text-white mb-2">Welcome back, {user?.name?.split(' ')[0] || 'Student'}</h1>
           <p className="text-gray-400">Here's what's happening with your learning programs today.</p>
         </div>
 
@@ -469,7 +577,16 @@ const StudentProfile = () => {
                     </h2>
                   </div>
                   <div className="space-y-4">
-                    {upcomingClasses.map((classItem) => (
+                    {loadingClasses && (
+                      <div className="text-sm text-gray-400 py-4">Loading classes...</div>
+                    )}
+                    {!loadingClasses && classesError && (
+                      <div className="text-sm text-red-400 py-4">{classesError}</div>
+                    )}
+                    {!loadingClasses && !classesError && upcomingSlice.length === 0 && (
+                      <div className="text-sm text-gray-400 py-4">No upcoming classes found.</div>
+                    )}
+                    {!loadingClasses && !classesError && upcomingSlice.map((classItem) => (
                       <div
                         key={classItem.id}
                         className="bg-[#0d1420] rounded-lg p-4 border border-gray-800 hover:border-gray-700 transition-all"
@@ -481,6 +598,11 @@ const StudentProfile = () => {
                               {classItem.status === 'live' && (
                                 <span className="px-2 py-1 bg-red-500 text-white text-xs font-bold rounded-full animate-pulse">
                                   LIVE
+                                </span>
+                              )}
+                              {classItem.status === 'postponed' && (
+                                <span className="px-2 py-1 bg-yellow-500 text-black text-xs font-bold rounded-full">
+                                  POSTPONED
                                 </span>
                               )}
                               {classItem.rescheduled && (
@@ -514,12 +636,47 @@ const StudentProfile = () => {
                             </div>
                           </div>
                           <button className="ml-4 px-4 py-2 bg-[#FFC540] text-black rounded-lg font-semibold hover:bg-[#FFC540] transition-all flex items-center gap-2 text-sm">
-                            <Video className="w-4 h-4" />
-                            {classItem.status === 'live' ? 'Join Now' : 'Calendar'}
+                            {classItem.status === 'live' ? (
+                              <>
+                                <Video className="w-4 h-4" />
+                                Join Now
+                              </>
+                            ) : classItem.epoch && classItem.epoch > Date.now() ? (
+                              <>
+                                <Calendar className="w-4 h-4" />
+                                Add to Calendar
+                              </>
+                            ) : (
+                              <>
+                                <CheckCircle className="w-4 h-4" />
+                                Completed
+                              </>
+                            )}
                           </button>
                         </div>
                       </div>
                     ))}
+                    {!loadingClasses && !classesError && upcomingOnly.length > 0 && (
+                      <div className="flex items-center justify-end gap-2 pt-4 border-t border-gray-800">
+                        <button
+                          onClick={goPrevUpcoming}
+                          disabled={upcomingPage === 1}
+                          className="px-3 py-1 rounded bg-gray-700 text-white text-sm disabled:opacity-40 disabled:cursor-not-allowed hover:bg-gray-600"
+                        >
+                          Prev
+                        </button>
+                        <span className="text-gray-300 text-sm">
+                          Page {upcomingPage} of {upcomingTotalPages}
+                        </span>
+                        <button
+                          onClick={goNextUpcoming}
+                          disabled={upcomingPage === upcomingTotalPages}
+                          className="px-3 py-1 rounded bg-gray-700 text-white text-sm disabled:opacity-40 disabled:cursor-not-allowed hover:bg-gray-600"
+                        >
+                          Next
+                        </button>
+                      </div>
+                    )}
                   </div>
                 </div>
 
@@ -671,7 +828,16 @@ const StudentProfile = () => {
           <div className="bg-[#1a2332] rounded-xl p-6 border border-gray-800">
             <h2 className="text-xl font-bold text-white mb-6">Class Schedule</h2>
             <div className="space-y-4">
-              {upcomingClasses.map((classItem) => (
+              {loadingClasses && (
+                <div className="text-gray-400 py-4">Loading schedule...</div>
+              )}
+              {!loadingClasses && classesError && (
+                <div className="text-red-400 py-4">{classesError}</div>
+              )}
+              {!loadingClasses && !classesError && scheduleSlice.length === 0 && (
+                <div className="text-gray-400 py-4">No classes found.</div>
+              )}
+              {!loadingClasses && !classesError && scheduleSlice.map((classItem) => (
                 <div
                   key={classItem.id}
                   className="bg-[#0d1420] rounded-lg p-6 border border-gray-800 hover:border-gray-700 transition-all"
@@ -683,6 +849,11 @@ const StudentProfile = () => {
                         {classItem.status === 'live' && (
                           <span className="px-3 py-1 bg-red-500 text-white text-sm font-bold rounded-full animate-pulse">
                             LIVE NOW
+                          </span>
+                        )}
+                        {classItem.status === 'postponed' && (
+                          <span className="px-3 py-1 bg-yellow-500 text-black text-sm font-bold rounded-full">
+                            POSTPONED
                           </span>
                         )}
                       </div>
@@ -706,12 +877,47 @@ const StudentProfile = () => {
                       </div>
                     </div>
                     <button className="ml-6 px-6 py-3 bg-[#FFC540] text-black rounded-lg font-bold hover:bg-[#FFC540] transition-all flex items-center gap-2">
-                      <Video className="w-4 h-4" />
-                      {classItem.status === 'live' ? 'Join Class' : 'Add to Calendar'}
+                      {classItem.status === 'live' ? (
+                        <>
+                          <Video className="w-4 h-4" />
+                          Join Class
+                        </>
+                      ) : classItem.epoch && classItem.epoch > Date.now() ? (
+                        <>
+                          <Calendar className="w-4 h-4" />
+                          Add to Calendar
+                        </>
+                      ) : (
+                        <>
+                          <CheckCircle className="w-4 h-4" />
+                          Completed
+                        </>
+                      )}
                     </button>
                   </div>
                 </div>
               ))}
+              {!loadingClasses && !classesError && allClassesSorted.length > 0 && (
+                <div className="flex items-center justify-end gap-2 pt-4 border-t border-gray-800">
+                  <button
+                    onClick={goPrevSchedule}
+                    disabled={schedulePage === 1}
+                    className="px-3 py-1 rounded bg-gray-700 text-white text-sm disabled:opacity-40 disabled:cursor-not-allowed hover:bg-gray-600"
+                  >
+                    Prev
+                  </button>
+                  <span className="text-gray-300 text-sm">
+                    Page {schedulePage} of {scheduleTotalPages}
+                  </span>
+                  <button
+                    onClick={goNextSchedule}
+                    disabled={schedulePage === scheduleTotalPages}
+                    className="px-3 py-1 rounded bg-gray-700 text-white text-sm disabled:opacity-40 disabled:cursor-not-allowed hover:bg-gray-600"
+                  >
+                    Next
+                  </button>
+                </div>
+              )}
             </div>
           </div>
         )}
