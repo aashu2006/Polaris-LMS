@@ -462,6 +462,12 @@ const lmsApi = {
       }, token);
     },
 
+    getClassSchedule: async (token: string) => {
+      return lmsApiRequest(`${LMS_BASE_URL}/api/v1/student/schedule/class-schedule`, {
+        method: 'GET',
+      }, token);
+    },
+
     getDashboardCards: async (token: string) => {
       try {
         const [totalClasses, totalCourses, avgAttendance] = await Promise.all([
@@ -1008,7 +1014,8 @@ export const useApi = () => {
       students: {
         getAll: () => lmsApi.students.getAll(token),
         getDashboardCards: () => lmsApi.students.getDashboardCards(token),
-        getStudentDetails: (page: number, limit: number) => lmsApi.adminStudents.getStudentDetails(page, limit, token),
+        getStudentDetails: (page: number, limit: number) => lmsApi.students.getStudentDetails(page, limit, token),
+        getClassSchedule: () => lmsApi.students.getClassSchedule(token),
       },
       mentors: {
         getAll: () => lmsApi.mentors.getAll(token),
