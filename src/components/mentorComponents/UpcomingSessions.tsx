@@ -1,9 +1,10 @@
 // src/components/mentorComponents/UpcomingSessions.tsx
 import React, { useEffect, useMemo, useState } from 'react';
 import { Calendar, Clock, Users, Video } from 'lucide-react';
+import { HMSRoomProvider } from '@100mslive/react-sdk';
 import { useAuth } from '../../contexts/AuthContext';
 import { useApi } from '../../services/api';
-import LiveSession from './LiveSession';
+import LiveClassRoom from './LiveClassRoom';
 import type { ApiSession, UiSession } from '../../types/sessions';
 
 const UpcomingSessions: React.FC = () => {
@@ -16,7 +17,9 @@ const UpcomingSessions: React.FC = () => {
 
   // modal state
   const [liveOpen, setLiveOpen] = useState<boolean>(false);
-  const [activeSession, setActiveSession] = useState<UiSession | null>(null);
+  const [sessionData, setSessionData] = useState<any>(null);
+  const [startingSession, setStartingSession] = useState<boolean>(false);
+  const [sessionMap, setSessionMap] = useState<Map<number, ApiSession>>(new Map());
 
   const BASE_URL = useMemo(() => {
     return (import.meta as any).env?.VITE_SCHEDULE_BASE_URL || '<<base_url>>';
@@ -92,7 +95,11 @@ const UpcomingSessions: React.FC = () => {
           return isLive || isRescheduled;
         });
 
+        const sessionMapLocal = new Map<number, ApiSession>();
         const mapped: UiSession[] = filtered.map((s) => {
+          // Store original session data for later use
+          sessionMapLocal.set(s.id, s);
+
           const dt = new Date(s.session_datetime);
           const today = new Date();
           const isToday = dt.toDateString() === today.toDateString();
@@ -150,7 +157,10 @@ const UpcomingSessions: React.FC = () => {
           };
         });
 
-        if (isMounted) setSessions(mapped);
+        if (isMounted) {
+          setSessions(mapped);
+          setSessionMap(sessionMapLocal);
+        }
       } catch (e: any) {
         if (isMounted) setError(e?.message || 'Failed to fetch sessions');
       } finally {
@@ -193,14 +203,101 @@ const UpcomingSessions: React.FC = () => {
     return status.toUpperCase();
   };
 
-  // open modal with session passed as prop
-  const openLive = (session: UiSession) => {
-    setActiveSession(session);
-    setLiveOpen(true);
+  // open modal with session passed as prop and start the session
+  const openLive = async (session: UiSession) => {
+    console.log('🚀 Opening live session:', session);
+    setStartingSession(true);
+    setError(null);
+
+    try {
+      const getFacultyIdFromToken = (t?: string | null): string | null => {
+        if (!t) return null;
+        try {
+          const parts = t.split('.');
+          if (parts.length < 2) return null;
+          const payload = parts[1].replace(/-/g, '+').replace(/_/g, '/');
+          const decoded = JSON.parse(decodeURIComponent(escape(atob(payload))));
+          return (
+            decoded.faculty_id ||
+            decoded.facultyId ||
+            decoded.userId ||
+            decoded.sub ||
+            decoded.id ||
+            null
+          );
+        } catch {
+          return null;
+        }
+      };
+
+      const facultyId = user?.id || getFacultyIdFromToken(token);
+      console.log('👤 Faculty ID:', facultyId);
+      if (!facultyId) {
+        throw new Error('Missing faculty id');
+      }
+
+      const originalSession = sessionMap.get(session.id);
+      console.log('📋 Original session:', originalSession);
+      if (!originalSession) {
+        throw new Error('Session data not found');
+      }
+
+      // Start the session via API
+      console.log('📡 Calling startSession API with:', { sessionId: session.id, facultyId });
+      const response = await api.multimedia.sessions.startSession(session.id, facultyId);
+      console.log('✅ API Response:', response);
+      
+      // Handle different response structures
+      let authToken = null;
+      let responseData = null;
+
+      if (response?.success && response?.data) {
+        responseData = response.data;
+        authToken = responseData.hms?.authToken || responseData.authToken || responseData.token;
+      } else if (response?.data) {
+        // Response might have data directly
+        responseData = response.data;
+        authToken = responseData.hms?.authToken || responseData.authToken || responseData.token;
+      } else if (response?.hms?.authToken) {
+        // Response might have hms directly
+        authToken = response.hms.authToken;
+        responseData = response;
+      } else if (response?.authToken) {
+        // Response might have authToken directly
+        authToken = response.authToken;
+        responseData = response;
+      }
+
+      console.log('🔑 Extracted auth token:', authToken ? 'Found' : 'Not found');
+
+      if (!authToken) {
+        console.error('❌ No auth token found in response:', response);
+        throw new Error('No auth token received from server. Please check API response.');
+      }
+
+      setSessionData({
+        sessionId: session.id,
+        facultyId: facultyId,
+        batchName: session.title,
+        courseName: session.subject,
+        hms: {
+          authToken: authToken,
+        },
+      });
+      console.log('✅ Session data set, opening modal');
+      setLiveOpen(true);
+    } catch (e: any) {
+      console.error('❌ Error starting session:', e);
+      const errorMessage = e?.response?.data?.message || e?.message || 'Failed to start session. Please try again.';
+      setError(errorMessage);
+      alert(`Error: ${errorMessage}`); // Temporary alert for debugging
+    } finally {
+      setStartingSession(false);
+    }
   };
 
   const closeLive = () => {
-    setActiveSession(null);
+    setSessionData(null);
     setLiveOpen(false);
   };
 
@@ -218,7 +315,18 @@ const UpcomingSessions: React.FC = () => {
 
         <div className="p-6">
           {loading && <div className="text-gray-400">Loading sessions...</div>}
-          {error && <div className="text-red-400">{error}</div>}
+          {error && (
+            <div className="mb-4 p-4 bg-red-900/50 border border-red-700 rounded-lg">
+              <div className="text-red-400 font-semibold mb-1">Error</div>
+              <div className="text-red-300 text-sm">{error}</div>
+              <button
+                onClick={() => setError(null)}
+                className="mt-2 text-red-400 hover:text-red-300 text-xs underline"
+              >
+                Dismiss
+              </button>
+            </div>
+          )}
 
           {!loading && !error && (
             <div className="space-y-4">
@@ -260,12 +368,20 @@ const UpcomingSessions: React.FC = () => {
                     <div className="flex items-center space-x-2">
                       <button
                         type="button"
-                        onClick={() => (session.action === 'Join Now' ? openLive(session) : undefined)}
-                        className={`flex items-center space-x-2 px-4 py-2 rounded-lg transition-colors duration-200 ${getActionColor(session.action)}`}
+                        onClick={(e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          console.log('🔘 Button clicked for session:', session);
+                          if (session.action === 'Join Now') {
+                            openLive(session);
+                          }
+                        }}
+                        disabled={startingSession}
+                        className={`flex items-center space-x-2 px-4 py-2 rounded-lg transition-colors duration-200 ${getActionColor(session.action)} ${startingSession ? 'opacity-50 cursor-not-allowed' : ''}`}
                       >
                         {session.action === 'Join Now' && <Video className="h-4 w-4" />}
                         {session.action === 'Calendar' && <Calendar className="h-4 w-4" />}
-                        <span>{session.action}</span>
+                        <span>{startingSession ? 'Starting...' : session.action}</span>
                       </button>
                     </div>
                   </div>
@@ -278,11 +394,23 @@ const UpcomingSessions: React.FC = () => {
         </div>
       </div>
 
-      {liveOpen && activeSession && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60">
-          <div className="w-full max-w-5xl h-[90vh] bg-[#0b1220] rounded-lg overflow-hidden shadow-xl">
-            <LiveSession session={activeSession} onClose={closeLive} />
+      {startingSession && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80">
+          <div className="bg-gray-800 rounded-lg p-8 border border-gray-700">
+            <div className="flex flex-col items-center space-y-4">
+              <div className="w-12 h-12 border-4 border-[#FFC540] border-t-transparent rounded-full animate-spin"></div>
+              <p className="text-white font-semibold">Starting session...</p>
+              <p className="text-gray-400 text-sm">Please wait</p>
+            </div>
           </div>
+        </div>
+      )}
+
+      {liveOpen && sessionData && (
+        <div className="fixed inset-0 z-50 bg-black/60">
+          <HMSRoomProvider>
+            <LiveClassRoom sessionData={sessionData} onClose={closeLive} />
+          </HMSRoomProvider>
         </div>
       )}
     </>

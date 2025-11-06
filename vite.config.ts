@@ -9,6 +9,11 @@ export default defineConfig({
       '/ums': {
         target: 'https://ums-672553132888.asia-south1.run.app',
         changeOrigin: true
+      },
+      '/mm': {
+        target: 'https://prod-multimedia.polariscampus.com',
+        changeOrigin: true,
+        rewrite: (path) => path.replace(/^\/mm/, '/mm/v3')
       }
     }
   }
