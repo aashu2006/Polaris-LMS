@@ -69,14 +69,20 @@ async function lmsApiRequest(url: string, options: RequestInit = {}, token?: str
       headers,
     });
 
+    // Read response as text first, then parse as JSON if possible
+    const responseText = await response.text();
     let data;
+
+    // Try to parse as JSON
     try {
-      data = await response.json();
+      data = responseText ? JSON.parse(responseText) : {};
     } catch (jsonError) {
-      // If response is not JSON, get text instead
-      const text = await response.text();
-      console.error('❌ Non-JSON response:', text);
-      throw new Error(`Server returned non-JSON response: ${text.substring(0, 100)}`);
+      // If response is not JSON, use the text as error message
+      console.error('❌ Non-JSON response:', responseText);
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}: ${responseText.substring(0, 200)}`);
+      }
+      throw new Error(`Server returned non-JSON response: ${responseText.substring(0, 200)}`);
     }
 
     if (!response.ok) {
