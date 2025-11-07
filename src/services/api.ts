@@ -468,6 +468,38 @@ const lmsApi = {
       }, token);
     },
 
+    getAssignments: async (token: string) => {
+      return lmsApiRequest(`${LMS_BASE_URL}/api/v1/studentAssignments/assignments`, {
+        method: 'GET',
+      }, token);
+    },
+
+    getAssignmentDetails: async (assignmentId: string, token: string) => {
+      return lmsApiRequest(`${LMS_BASE_URL}/api/v1/studentAssignments/assignments/${assignmentId}`, {
+        method: 'GET',
+      }, token);
+    },
+
+    submitAssignment: async (formData: FormData, token: string) => {
+      const headers: Record<string, string> = {};
+      if (token) {
+        headers['Authorization'] = `Bearer ${token}`;
+      }
+
+      const response = await fetch(`${LMS_BASE_URL}/api/v1/studentAssignments/upload/assignment`, {
+        method: 'POST',
+        headers,
+        body: formData,
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(`HTTP ${response.status}: ${errorText}`);
+      }
+
+      return response.json();
+    },
+
     getDashboardCards: async (token: string) => {
       try {
         const [totalClasses, totalCourses, avgAttendance] = await Promise.all([
@@ -1016,6 +1048,9 @@ export const useApi = () => {
         getDashboardCards: () => lmsApi.students.getDashboardCards(token),
         getStudentDetails: (page: number, limit: number) => lmsApi.students.getStudentDetails(page, limit, token),
         getClassSchedule: () => lmsApi.students.getClassSchedule(token),
+        getAssignments: () => lmsApi.students.getAssignments(token),
+        getAssignmentDetails: (assignmentId: string) => lmsApi.students.getAssignmentDetails(assignmentId, token),
+        submitAssignment: (formData: FormData) => lmsApi.students.submitAssignment(formData, token),
       },
       mentors: {
         getAll: () => lmsApi.mentors.getAll(token),
