@@ -6,6 +6,7 @@ import RecentActivity from './RecentActivity';
 import MentorStudents from './MentorStudents';
 import MentorSchedule from './MentorSchedule';
 import MentorRecordings from './MentorRecordings';
+import MentorAssignments from './MentorAssignments';
 import MentorSessions from './MentorSessions';
 import MentorAnalytics from './MentorAnalytics';
 import StudentFeedbackHistory from './StudentFeedbackHistory';
@@ -46,6 +47,7 @@ const MentorOverview: React.FC<MentorOverviewProps> = ({ activeSection, setActiv
     { id: 'students', label: 'My Students' },
     { id: 'schedule', label: 'Schedule' },
     { id: 'sessions', label: 'Live Sessions' },
+    { id: 'assignments', label: 'Assignments' },
     { id: 'recordings', label: 'Recordings' },
     { id: 'analytics', label: 'Analytics' },
   ];
@@ -81,6 +83,8 @@ const MentorOverview: React.FC<MentorOverviewProps> = ({ activeSection, setActiv
         return <MentorSessions />;
       case 'recordings':
         return <MentorRecordings />;
+      case 'assignments':
+        return <MentorAssignments />;
       case 'analytics':
         return <MentorAnalytics />;
       default:
