@@ -136,9 +136,31 @@ const ProgramModal: React.FC<ProgramModalProps> = ({ isOpen, onClose, program, m
     fetchData();
   }, [isOpen, mode, program, api]);
   
-  const filteredMentors = faculties.filter(mentor =>
-    mentor.profiles.name.toLowerCase().includes(searchTerm.toLowerCase())
-  );
+  const allowedStatuses = ['active', 'inactive', 'archived'] as const;
+  type StatusValue = (typeof allowedStatuses)[number];
+
+  const normalizeStatus = (value: any): StatusValue => {
+    if (typeof value === 'boolean') {
+      return value ? 'active' : 'inactive';
+    }
+
+    const status = typeof value === 'string' ? value.trim().toLowerCase() : '';
+
+    if (status === 'completed' || status === 'complete') {
+      return 'archived';
+    }
+
+    if ((allowedStatuses as readonly string[]).includes(status)) {
+      return status as StatusValue;
+    }
+
+    return 'active';
+  };
+
+  const filteredMentors = faculties.filter((mentor) => {
+    const name = mentor?.profiles?.name?.toLowerCase?.() ?? '';
+    return name.includes(searchTerm.toLowerCase());
+  });
 
   useEffect(() => {
     if (!program) {
@@ -152,6 +174,7 @@ const ProgramModal: React.FC<ProgramModalProps> = ({ isOpen, onClose, program, m
         endDate: '',
         assignedMentor: null
       });
+      setSelectedFacultyId('');
       return;
     }
 
@@ -163,15 +186,14 @@ const ProgramModal: React.FC<ProgramModalProps> = ({ isOpen, onClose, program, m
       name: apiItem?.course_name ?? apiItem?.name ?? '',
       cohort: apiItem?.batch_name ?? apiItem?.cohort ?? '',
       sessions: typeof apiItem?.sessions === 'number' ? apiItem.sessions : parseInt(apiItem?.sessions ?? '0', 10) || 0,
-      status: typeof apiItem?.active === 'boolean'
-        ? (apiItem.active ? 'active' : 'inactive')
-        : (apiItem?.active ?? apiItem?.status ?? 'active'),
+      status: normalizeStatus(typeof apiItem?.active === 'boolean' ? apiItem.active : apiItem?.status),
       startDate: apiItem?.start_date ?? apiItem?.startDate ?? '',
       endDate: apiItem?.end_date ?? apiItem?.endDate ?? '',
       assignedMentor: apiItem?.faculty_name ? { id: apiItem?.faculty_id?.toString?.() || '', name: apiItem.faculty_name } : (apiItem?.assignedMentor ?? null)
     };
 
     setEditData(mapped);
+    setSelectedFacultyId(mapped.assignedMentor?.id ?? '');
     
   }, [program, isOpen]);
 
@@ -181,13 +203,19 @@ const ProgramModal: React.FC<ProgramModalProps> = ({ isOpen, onClose, program, m
       try {
         setLoadingReschedules(true);
 
+        if (!program) {
+          setReschedules([]);
+          setMentorReschedules(null);
+          return;
+        }
+
         const anyProgram = program as any;
         const candidate = anyProgram?.course_id ?? anyProgram?.id ?? '';
         const courseId = parseInt(String(candidate), 10);
 
         if (Number.isNaN(courseId)) {
-          console.warn('Program id/course_id is not numeric; skipping reschedule fetch:', candidate);
           setReschedules([]);
+          setMentorReschedules(null);
           return;
         }
 
@@ -280,17 +308,46 @@ const transformedReschedules = reschedules.map((reschedule: any) => {
           return;
         }
 
-        // New API payload keys
+        if (!selectedBatchId) {
+          alert('Please select a batch.');
+          return;
+        }
+
+        if (!selectedFacultyId) {
+          alert('Please select a faculty member.');
+          return;
+        }
+
+        const courseName = (editData.name ?? '').trim();
+        const startDate = editData.startDate ?? '';
+        const endDate = editData.endDate ?? '';
+        const statusValue = normalizeStatus(editData.status);
+
+        if (!courseName || !startDate || !endDate) {
+          alert('Please fill out program name, start date, and end date.');
+          return;
+        }
+
         const programData = {
-          course_name: editData.name ?? '',
-          batch_id: selectedBatchId || undefined,
-          start_date: editData.startDate ?? '',
-          end_date: editData.endDate ?? '',
-          faculty_id: selectedFacultyId || undefined,
-          active: (editData.status ?? 'active') === 'active',
+          courseName,
+          batchId: selectedBatchId,
+          startDate,
+          endDate,
+          facultyId: selectedFacultyId,
+          status: statusValue,
+          active: statusValue,
+          activeStatus: statusValue,
+          active_status: statusValue,
           sessions: editData.sessions ?? 0,
           theory_hours: 30,
-          practical_hours: 30
+          practical_hours: 30,
+          // legacy keys for backward compatibility
+          course_name: courseName,
+          batch_id: selectedBatchId,
+          start_date: startDate,
+          end_date: endDate,
+          faculty_id: selectedFacultyId,
+          status_text: statusValue
         } as any;
 
         const result = await api.lms.adminPrograms.createProgram(programData);
@@ -313,7 +370,16 @@ const transformedReschedules = reschedules.map((reschedule: any) => {
   };
 
   const handleMentorSelect = (mentor: any) => {
-    setEditData({ ...editData, assignedMentor: mentor });
+    const normalizedMentor = {
+      id: mentor?.user_id ?? mentor?.id ?? '',
+      name: mentor?.profiles?.name ?? mentor?.name ?? 'Unknown Faculty',
+    };
+
+    setEditData((prev) => ({
+      ...prev,
+      assignedMentor: normalizedMentor,
+    }));
+    setSelectedFacultyId(normalizedMentor.id);
     setShowMentorDropdown(false);
     setSearchTerm('');
   };
@@ -546,14 +612,21 @@ const transformedReschedules = reschedules.map((reschedule: any) => {
                   </label>
                   {mode === 'view' ? (
                     <div className="h-12 flex items-center px-4 bg-gray-800 rounded-lg">
-                      <span className={`inline-flex px-3 py-1 text-xs font-medium rounded-full ${((program as any)?.status ?? (program as any)?.active) === 'active' ? 'text-green-400 bg-green-400/10' :
-                        ((program as any)?.status ?? (program as any)?.active) === 'completed' ? 'text-yellow-400 bg-yellow-400/10' :
-                          'text-gray-400 bg-gray-400/10'
-                        }`}>
-                        {((program as any)?.status ?? (program as any)?.active)
-                          ? String(((program as any)?.status ?? (program as any)?.active)).charAt(0).toUpperCase() + String(((program as any)?.status ?? (program as any)?.active)).slice(1)
-                          : 'N/A'}
-                      </span>
+                      {(() => {
+                        const rawStatus = (program as any)?.status ?? (program as any)?.active;
+                        const normalized = normalizeStatus(rawStatus);
+                        const badgeClass = normalized === 'active'
+                          ? 'text-green-400 bg-green-400/10'
+                          : normalized === 'inactive'
+                            ? 'text-gray-300 bg-gray-400/10'
+                            : 'text-yellow-400 bg-yellow-400/10';
+                        const label = normalized.charAt(0).toUpperCase() + normalized.slice(1);
+                        return (
+                          <span className={`inline-flex px-3 py-1 text-xs font-medium rounded-full ${badgeClass}`}>
+                            {label}
+                          </span>
+                        );
+                      })()}
                     </div>
                   ) : (
                     <select
@@ -563,7 +636,7 @@ const transformedReschedules = reschedules.map((reschedule: any) => {
                     >
                       <option value="active">Active</option>
                       <option value="inactive">Inactive</option>
-                      <option value="completed">Completed</option>
+                      <option value="archived">Archived</option>
                     </select>
                   )}
                 </div>

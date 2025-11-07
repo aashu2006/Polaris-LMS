@@ -61,17 +61,61 @@ async function lmsApiRequest(url: string, options: RequestInit = {}, token?: str
     // Don't send x-access-token for live LMS backend
   }
 
-  const response = await fetch(url, {
-    ...options,
-    headers,
-  });
+  try {
+    console.log('📡 Making API request:', { url, method: options.method || 'GET', hasToken: !!token });
+    
+    const response = await fetch(url, {
+      ...options,
+      headers,
+    });
 
-  if (!response.ok) {
-    const errorText = await response.text();
-    throw new Error(`HTTP ${response.status}: ${errorText}`);
+    // Read response as text first, then parse as JSON if possible
+    const responseText = await response.text();
+    let data;
+
+    // Try to parse as JSON
+    try {
+      data = responseText ? JSON.parse(responseText) : {};
+    } catch (jsonError) {
+      // If response is not JSON, use the text as error message
+      console.error('❌ Non-JSON response:', responseText);
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}: ${responseText.substring(0, 200)}`);
+      }
+      throw new Error(`Server returned non-JSON response: ${responseText.substring(0, 200)}`);
+    }
+
+    if (!response.ok) {
+      const errorMessage = data?.message || data?.error || `HTTP ${response.status}: ${response.statusText}`;
+      console.error('❌ API error response:', { status: response.status, errorMessage, data });
+      throw new Error(errorMessage);
+    }
+
+    // Check if response indicates an error even with 200 status
+    if (data?.success === false) {
+      console.error('❌ API returned success=false:', data);
+      throw new Error(data?.message || data?.error || 'Request failed');
+    }
+
+    return data;
+  } catch (error: any) {
+    // Handle network errors (CORS, connection refused, etc.)
+    if (error instanceof TypeError && error.message.includes('fetch')) {
+      console.error('❌ Network error (CORS/Connection):', {
+        url,
+        error: error.message,
+        suggestion: 'Check CORS settings or network connectivity'
+      });
+      throw new Error(`Network error: Unable to reach ${url}. This might be a CORS issue or the server is unreachable.`);
+    }
+    
+    // If it's already an Error with a message, re-throw it
+    if (error instanceof Error) {
+      throw error;
+    }
+    // Otherwise, wrap it
+    throw new Error(error?.message || 'Network error occurred');
   }
-
-  return response.json();
 }
 
 // Generic API request function with automatic token refresh
@@ -862,6 +906,21 @@ const lmsApi = {
 };
 
 // Multimedia API functions
+// In development, use proxy to avoid CORS issues. In production, use direct URL.
+const getMMBaseURL = () => {
+  if (import.meta.env.VITE_MULTIMEDIA_BASE_URL) {
+    return import.meta.env.VITE_MULTIMEDIA_BASE_URL;
+  }
+  // In development, use proxy if available
+  if (import.meta.env.DEV) {
+    return '/mm/v3'; // This will use the Vite proxy
+  }
+  // Production fallback
+  return 'https://prod-multimedia.polariscampus.com/mm/v3';
+};
+
+const MM_BASE_URL = getMMBaseURL();
+
 const multimediaApi = {
   sessions: {
     getAll: async (token: string) => {
@@ -879,6 +938,54 @@ const multimediaApi = {
     getUpcoming: async (token: string) => {
       return apiRequest(`${LMS_BASE_URL}/api/v1/session/upcoming`, {
         method: 'GET',
+      }, token);
+    },
+
+    startSession: async (sessionId: number, facultyId: string, token: string) => {
+      const url = `${MM_BASE_URL}/liveclass/session/start`;
+      console.log('🌐 Starting session request:', {
+        url,
+        sessionId,
+        facultyId,
+        hasToken: !!token,
+        mmBaseUrl: MM_BASE_URL
+      });
+      
+      try {
+        const response = await lmsApiRequest(url, {
+          method: 'POST',
+          body: JSON.stringify({ sessionId, facultyId }),
+          headers: {
+            'Content-Type': 'application/json',
+          },
+        }, token);
+        console.log('✅ Start session response:', response);
+        return response;
+      } catch (error: any) {
+        console.error('❌ Start session error:', {
+          error,
+          message: error?.message,
+          url,
+          sessionId,
+          facultyId
+        });
+        throw error;
+      }
+    },
+
+    getSessionStatus: async (sessionId: string, token: string) => {
+      return lmsApiRequest(`${MM_BASE_URL}/liveclass/session/${sessionId}/status`, {
+        method: 'GET',
+      }, token);
+    },
+
+    endSession: async (sessionId: number, facultyId: string, token: string) => {
+      return lmsApiRequest(`${MM_BASE_URL}/liveclass/session/end`, {
+        method: 'POST',
+        body: JSON.stringify({ sessionId, facultyId }),
+        headers: {
+          'Content-Type': 'application/json',
+        },
       }, token);
     },
   },
@@ -1096,6 +1203,9 @@ export const useApi = () => {
         getAll: () => multimediaApi.sessions.getAll(token),
         getStats: () => multimediaApi.sessions.getStats(token),
         getUpcoming: () => multimediaApi.sessions.getUpcoming(token),
+        startSession: (sessionId: number, facultyId: string) => multimediaApi.sessions.startSession(sessionId, facultyId, token),
+        getSessionStatus: (sessionId: string) => multimediaApi.sessions.getSessionStatus(sessionId, token),
+        endSession: (sessionId: number, facultyId: string) => multimediaApi.sessions.endSession(sessionId, facultyId, token),
       },
       reports: {
         getAttendanceReport: (filters: any) => multimediaApi.reports.getAttendanceReport(filters, token),
