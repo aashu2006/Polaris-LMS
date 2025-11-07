@@ -5,16 +5,6 @@ import react from '@vitejs/plugin-react'
 export default defineConfig({
   plugins: [react()],
   server: {
-    proxy: {
-      '/ums': {
-        target: 'https://ums-672553132888.asia-south1.run.app',
-        changeOrigin: true
-      },
-      '/mm': {
-        target: 'https://prod-multimedia.polariscampus.com',
-        changeOrigin: true,
-        rewrite: (path) => path.replace(/^\/mm/, '/mm/v3')
-      }
-    }
+    port: 8080
   }
 })
