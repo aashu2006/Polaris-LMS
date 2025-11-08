@@ -415,7 +415,7 @@ const MentorSchedule: React.FC = () => {
       </div>
 
       {/* Quick Schedule Form */}
-      <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+      {/* <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
         <h3 className="text-lg font-bold text-gray-900 mb-4">Quick Schedule</h3>
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
           <div>
@@ -457,7 +457,7 @@ const MentorSchedule: React.FC = () => {
             <span>Schedule Session</span>
           </button>
         </div>
-      </div>
+      </div> */}
 
       {/* Reschedule Modal */}
       {rescheduleModal.isOpen && (
