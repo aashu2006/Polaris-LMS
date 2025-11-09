@@ -117,8 +117,8 @@ const MentorSchedule: React.FC = () => {
         setError(null);
   
 
-        const facultyId = user?.id || '';
-        const resp = await api.lms.adminMentors.getAllSessions(facultyId);
+        // Use getFacultyStudents API which returns sessions with student_count
+        const resp = await api.lms.mentors.getFacultyStudents();
 
         const data = Array.isArray(resp) ? resp : (resp?.data ?? []);
   
@@ -153,6 +153,7 @@ const MentorSchedule: React.FC = () => {
   
         if (isMounted) setSessions(mapped);
       } catch (err: any) {
+        console.error('Error loading sessions:', err);
         if (isMounted) setError(err?.message ?? 'Failed to load sessions');
       } finally {
         if (isMounted) setLoading(false);
