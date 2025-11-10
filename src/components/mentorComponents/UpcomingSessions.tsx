@@ -12,6 +12,7 @@ const UpcomingSessions: React.FC = () => {
   const { user, token } = useAuth();
 
   const [sessions, setSessions] = useState<UiSession[]>([]);
+  const [batches, setBatches] = useState<Record<number, any>>({});
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -77,8 +78,31 @@ const UpcomingSessions: React.FC = () => {
           throw new Error('Missing faculty id');
         }
 
-        const json = await api.lms.mentors.getAllSessions(facultyId);
-        const data: ApiSession[] = json?.data ?? [];
+        const [batchesResp, sessionsResp] = await Promise.all([
+          api.lms.mentors.getBatches().catch(() => ({ batches: [] })),
+          api.lms.mentors.getAllSessions(facultyId),
+        ]);
+
+        // Console log the sessions API response
+        console.log('📡 GET Sessions API Response:', {
+          full_response: sessionsResp,
+          sessions_count: sessionsResp?.data?.length || 0,
+          first_session_sample: sessionsResp?.data?.[0] || null,
+          has_batch_id: sessionsResp?.data?.[0]?.batch_id !== undefined,
+        });
+
+        const batchMap: Record<number, any> = {};
+        const batchesList = batchesResp?.batches || batchesResp || [];
+        if (Array.isArray(batchesList)) {
+          batchesList.forEach((batch: any) => {
+            const id = Number(batch?.id);
+            if (Number.isFinite(id)) {
+              batchMap[id] = batch;
+            }
+          });
+        }
+
+        const data: ApiSession[] = sessionsResp?.data ?? [];
 
         const now = new Date();
 
@@ -98,7 +122,10 @@ const UpcomingSessions: React.FC = () => {
         const sessionMapLocal = new Map<number, ApiSession>();
         const mapped: UiSession[] = filtered.map((s) => {
           // Store original session data for later use
-          sessionMapLocal.set(s.id, s);
+          const sessionId = Number(s.id);
+          if (Number.isFinite(sessionId)) {
+            sessionMapLocal.set(sessionId, s);
+          }
 
           const dt = new Date(s.session_datetime);
           const today = new Date();
@@ -118,7 +145,7 @@ const UpcomingSessions: React.FC = () => {
 
           if (!!s.is_live && nowInner >= dt && nowInner <= end) {
             return {
-              id: s.id,
+              id: sessionId,
               title: s.course_name || `Session ${s.id}`,
               instructor: '', // can map if API provides instructor later
               subject: s.course_name || '',
@@ -132,7 +159,7 @@ const UpcomingSessions: React.FC = () => {
           const apiStatus = (s.status || '').toLowerCase();
           if (apiStatus === 'postponed' && dt > nowInner) {
             return {
-              id: s.id,
+              id: sessionId,
               title: s.course_name || `Session ${s.id}`,
               instructor: '',
               subject: s.course_name || '',
@@ -145,7 +172,7 @@ const UpcomingSessions: React.FC = () => {
           }
 
           return {
-            id: s.id,
+            id: sessionId,
             title: s.course_name || `Session ${s.id}`,
             instructor: '',
             subject: s.course_name || '',
@@ -159,6 +186,7 @@ const UpcomingSessions: React.FC = () => {
 
         if (isMounted) {
           setSessions(mapped);
+          setBatches(batchMap);
           setSessionMap(sessionMapLocal);
         }
       } catch (e: any) {
@@ -205,7 +233,6 @@ const UpcomingSessions: React.FC = () => {
 
   // open modal with session passed as prop and start the session
   const openLive = async (session: UiSession) => {
-    console.log('🚀 Opening live session:', session);
     setStartingSession(true);
     setError(null);
 
@@ -231,21 +258,58 @@ const UpcomingSessions: React.FC = () => {
       };
 
       const facultyId = user?.id || getFacultyIdFromToken(token);
-      console.log('👤 Faculty ID:', facultyId);
       if (!facultyId) {
         throw new Error('Missing faculty id');
       }
 
       const originalSession = sessionMap.get(session.id);
-      console.log('📋 Original session:', originalSession);
       if (!originalSession) {
         throw new Error('Session data not found');
       }
 
-      // Start the session via API
-      console.log('📡 Calling startSession API with:', { sessionId: session.id, facultyId });
-      const response = await api.multimedia.sessions.startSession(session.id, facultyId);
-      console.log('✅ API Response:', response);
+      console.log('📋 Session data (for batchId debug):', {
+        id: originalSession?.id,
+        batch_id: originalSession?.batch_id,
+        section_id: originalSession?.section_id,
+        course_id: originalSession?.course_id,
+        course_sections: originalSession?.course_sections,
+      });
+
+      const batchName = (originalSession as any)?.batch_name || (originalSession as any)?.cohort;
+
+      let batchId: number | undefined;
+
+      // Priority 1: Direct batch_id from API response
+      if (Number.isFinite(originalSession?.batch_id) && (originalSession?.batch_id ?? 0) > 0) {
+        batchId = Number(originalSession.batch_id);
+        console.log('✅ Using batch_id directly from API response:', batchId);
+      }
+      
+      // Priority 2: Match by batch_name with fetched batches
+      if ((!Number.isFinite(batchId) || (batchId ?? 0) <= 0) && batchName && Object.keys(batches).length > 0) {
+        const matched = Object.entries(batches).find(([_, batch]) => {
+          const name = (batch as any)?.batch_name || (batch as any)?.name;
+          return typeof name === 'string' && name.trim().toLowerCase() === String(batchName).trim().toLowerCase();
+        });
+        if (matched) {
+          batchId = Number(matched[0]);
+          console.log('✅ Using batch_id from batch name match:', batchId);
+        }
+      }
+
+      // Priority 3: Error if no batch_id found
+      if (!Number.isFinite(batchId) || (batchId ?? 0) <= 0) {
+        console.error('❌ BatchId extraction failed:', {
+          batch_id: originalSession?.batch_id,
+          batch_name: batchName,
+          batches_available: Object.keys(batches).length,
+        });
+        throw new Error('Missing batch/section ID - API must provide batch_id in session response');
+      }
+
+      const facultyName = displayName || user?.name || originalSession?.faculty_name || 'Faculty';
+
+      const response = await api.multimedia.sessions.startSession(session.id, facultyId, Number(batchId), facultyName);
       
       // Handle different response structures
       let authToken = null;
@@ -268,26 +332,23 @@ const UpcomingSessions: React.FC = () => {
         responseData = response;
       }
 
-      console.log('🔑 Extracted auth token:', authToken ? 'Found' : 'Not found');
-
       if (!authToken) {
-        console.error('❌ No auth token found in response:', response);
         throw new Error('No auth token received from server. Please check API response.');
       }
 
       setSessionData({
         sessionId: session.id,
         facultyId: facultyId,
+        batchId,
+        facultyName,
         batchName: session.title,
         courseName: session.subject,
         hms: {
           authToken: authToken,
         },
       });
-      console.log('✅ Session data set, opening modal');
       setLiveOpen(true);
     } catch (e: any) {
-      console.error('❌ Error starting session:', e);
       const errorMessage = e?.response?.data?.message || e?.message || 'Failed to start session. Please try again.';
       setError(errorMessage);
       alert(`Error: ${errorMessage}`); // Temporary alert for debugging
@@ -371,7 +432,6 @@ const UpcomingSessions: React.FC = () => {
                         onClick={(e) => {
                           e.preventDefault();
                           e.stopPropagation();
-                          console.log('🔘 Button clicked for session:', session);
                           if (session.action === 'Join Now') {
                             openLive(session);
                           }

@@ -9,6 +9,35 @@ const LMS_BASE_URL = import.meta.env.VITE_LMS_BASE_URL || 'https://live-class-lm
 // Token storage and refresh functionality
 let refreshTokenPromise: Promise<string> | null = null;
 
+// Helper function to redirect to appropriate login page based on user type
+// Only call this for actual 401 authentication errors
+function redirectToLogin() {
+  // Use a flag to prevent multiple redirects
+  if ((window as any).__redirectingToLogin) {
+    return;
+  }
+  (window as any).__redirectingToLogin = true;
+  
+  try {
+    const storedUser = localStorage.getItem('auth_user');
+    if (storedUser) {
+      const user = JSON.parse(storedUser);
+      if (user.userType === 'student') {
+        window.location.replace('/student/login');
+        return;
+      } else if (user.userType === 'faculty') {
+        window.location.replace('/faculty/login');
+        return;
+      }
+    }
+  } catch (error) {
+    // If we can't parse user, fall back to admin login
+  }
+  // Default to admin login or landing page
+  // Use replace instead of href to prevent back button issues
+  window.location.replace('/admin/login');
+}
+
 async function refreshAccessToken(refreshToken: string): Promise<string> {
   if (refreshTokenPromise) {
     return refreshTokenPromise;
@@ -16,7 +45,9 @@ async function refreshAccessToken(refreshToken: string): Promise<string> {
 
   refreshTokenPromise = (async () => {
     try {
-      const response = await fetch(`${UMS_BASE_URL}/api/auth/refresh`, {
+      // Try both possible refresh token endpoint paths
+      const refreshUrl = `${UMS_BASE_URL}/ums/api/auth/refresh`;
+      const response = await fetch(refreshUrl, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -25,22 +56,38 @@ async function refreshAccessToken(refreshToken: string): Promise<string> {
       });
 
       if (!response.ok) {
-        throw new Error('Failed to refresh token');
+        const errorText = await response.text();
+        let errorMessage = 'Failed to refresh token';
+        try {
+          const errorData = JSON.parse(errorText);
+          errorMessage = errorData.message || errorMessage;
+        } catch (e) {
+          // If not JSON, use the text or default message
+          errorMessage = errorText || errorMessage;
+        }
+        throw new Error(errorMessage);
       }
 
       const data = await response.json();
-      const newAccessToken = data.accessToken;
+      const newAccessToken = data.accessToken || data.token;
       const newRefreshToken = data.refreshToken;
+
+      if (!newAccessToken) {
+        throw new Error('No access token received from refresh endpoint');
+      }
 
       // Update stored tokens
       localStorage.setItem('accessToken', newAccessToken);
-      localStorage.setItem('refreshToken', newRefreshToken);
+      if (newRefreshToken) {
+        localStorage.setItem('refreshToken', newRefreshToken);
+      }
 
       return newAccessToken;
     } catch (error) {
       // Clear tokens on refresh failure
       localStorage.removeItem('accessToken');
       localStorage.removeItem('refreshToken');
+      console.error('Token refresh failed:', error);
       throw error;
     } finally {
       refreshTokenPromise = null;
@@ -56,14 +103,19 @@ async function lmsApiRequest(url: string, options: RequestInit = {}, token?: str
     ...(options.headers as Record<string, string>),
   };
 
-  if (token) {
+  // Multimedia service requires token - validate it's provided
+  if (url.includes('multimedia') || url.includes('mm/v3')) {
+    if (!token) {
+      throw new Error('Token not provided');
+    }
     headers['Authorization'] = `Bearer ${token}`;
-    // Don't send x-access-token for live LMS backend
+    headers['x-access-token'] = token;
+  } else if (token) {
+    // For LMS backend, only send Authorization header
+    headers['Authorization'] = `Bearer ${token}`;
   }
 
   try {
-    console.log('📡 Making API request:', { url, method: options.method || 'GET', hasToken: !!token });
-    
     const response = await fetch(url, {
       ...options,
       headers,
@@ -77,8 +129,6 @@ async function lmsApiRequest(url: string, options: RequestInit = {}, token?: str
     try {
       data = responseText ? JSON.parse(responseText) : {};
     } catch (jsonError) {
-      // If response is not JSON, use the text as error message
-      console.error('❌ Non-JSON response:', responseText);
       if (!response.ok) {
         throw new Error(`HTTP ${response.status}: ${responseText.substring(0, 200)}`);
       }
@@ -87,13 +137,11 @@ async function lmsApiRequest(url: string, options: RequestInit = {}, token?: str
 
     if (!response.ok) {
       const errorMessage = data?.message || data?.error || `HTTP ${response.status}: ${response.statusText}`;
-      console.error('❌ API error response:', { status: response.status, errorMessage, data });
       throw new Error(errorMessage);
     }
 
     // Check if response indicates an error even with 200 status
     if (data?.success === false) {
-      console.error('❌ API returned success=false:', data);
       throw new Error(data?.message || data?.error || 'Request failed');
     }
 
@@ -101,11 +149,6 @@ async function lmsApiRequest(url: string, options: RequestInit = {}, token?: str
   } catch (error: any) {
     // Handle network errors (CORS, connection refused, etc.)
     if (error instanceof TypeError && error.message.includes('fetch')) {
-      console.error('❌ Network error (CORS/Connection):', {
-        url,
-        error: error.message,
-        suggestion: 'Check CORS settings or network connectivity'
-      });
       throw new Error(`Network error: Unable to reach ${url}. This might be a CORS issue or the server is unreachable.`);
     }
     
@@ -148,23 +191,85 @@ async function apiRequest(url: string, options: RequestInit = {}, token?: string
           ...options,
           headers,
         });
-        return retryResponse.json();
-      } catch (error) {
+        
+        // Check if retry was successful
+        if (!retryResponse.ok) {
+          // Create error with status code preserved
+          const error: any = new Error(`HTTP error! status: ${retryResponse.status}`);
+          error.status = retryResponse.status;
+          error.response = { status: retryResponse.status };
+          
+          if (retryResponse.status === 401) {
+            // Still unauthorized after refresh - mark as 401 but don't redirect automatically
+            // Let the component handle the redirect
+            error.message = 'Authentication failed after token refresh';
+            throw error;
+          }
+          // For other errors, try to parse error message
+          try {
+            const errorData = await retryResponse.json();
+            error.message = errorData.message || `HTTP error! status: ${retryResponse.status}`;
+            throw error;
+          } catch (parseError) {
+            throw error;
+          }
+        }
+        
+        // Parse successful response
+        try {
+          return await retryResponse.json();
+        } catch (parseError) {
+          // If response is not JSON, return empty object or text
+          const text = await retryResponse.text();
+          return text ? { data: text } : {};
+        }
+      } catch (error: any) {
         // Redirect to login on refresh failure
-        window.location.href = '/admin';
+        // Preserve status code if it exists
+        if (error.status === undefined) {
+          error.status = 401;
+          error.response = { status: 401 };
+        }
+        // Don't redirect here - let the component handle it based on error status
+        // This prevents automatic redirects that might interfere with error handling
         throw error;
       }
     } else {
-      window.location.href = '/admin';
-      throw new Error('No refresh token available');
+      // No refresh token available - mark as 401 but don't redirect automatically
+      // Let the component decide whether to redirect
+      const error: any = new Error('No refresh token available. Please login again.');
+      error.status = 401;
+      error.response = { status: 401 };
+      // Don't redirect here - let the component handle it
+      throw error;
     }
   }
 
   if (!response.ok) {
-    throw new Error(`HTTP error! status: ${response.status}`);
+    // Create error with status code preserved for proper error handling
+    const error: any = new Error(`HTTP error! status: ${response.status}`);
+    error.status = response.status;
+    error.response = { status: response.status, statusText: response.statusText };
+    
+    // Try to get error message from response
+    try {
+      const errorData = await response.json();
+      error.message = errorData?.message || errorData?.error || `HTTP error! status: ${response.status}`;
+      error.response.data = errorData;
+    } catch (parseError) {
+      // If response is not JSON, use status text
+      error.message = `HTTP error! status: ${response.status} - ${response.statusText}`;
+    }
+    throw error;
   }
 
-  return response.json();
+  // Try to parse response as JSON
+  try {
+    return await response.json();
+  } catch (parseError) {
+    // If response is not JSON, return empty object
+    return {};
+  }
 }
 
 // UMS API functions
@@ -298,13 +403,13 @@ const umsApi = {
   // Alerts
   alerts: {
     getAll: async (token: string) => {
-      return apiRequest(`${UMS_BASE_URL}/api/alerts/list`, {
+      return apiRequest(`${UMS_BASE_URL}/ums/api/alerts/list`, {
         method: 'GET',
       }, token);
     },
 
     getStats: async (token: string) => {
-      return apiRequest(`${UMS_BASE_URL}/api/alerts/stats`, {
+      return apiRequest(`${UMS_BASE_URL}/ums/api/alerts/stats`, {
         method: 'GET',
       }, token);
     },
@@ -396,8 +501,10 @@ const umsApi = {
       
       const data = await response.json();
       const token = response.headers.get('x-access-token');
+      // Extract refreshToken from response body or headers
+      const refreshToken = data.refreshToken || response.headers.get('x-refresh-token') || response.headers.get('refresh-token');
       
-      return { user: data.user, token };
+      return { user: data.user, token, refreshToken };
     },
 
     // Google OAuth Login - Student
@@ -415,8 +522,10 @@ const umsApi = {
       
       const data = await response.json();
       const accessToken = response.headers.get('x-access-token');
+      // Extract refreshToken from response body or headers
+      const refreshToken = data.refreshToken || response.headers.get('x-refresh-token') || response.headers.get('refresh-token');
       
-      return { user: data.user, token: accessToken };
+      return { user: data.user, token: accessToken, refreshToken };
     },
 
     // Google OAuth Login - Faculty
@@ -434,8 +543,10 @@ const umsApi = {
       
       const data = await response.json();
       const accessToken = response.headers.get('x-access-token');
+      // Extract refreshToken from response body or headers
+      const refreshToken = data.refreshToken || response.headers.get('x-refresh-token') || response.headers.get('refresh-token');
       
-      return { user: data.user, token: accessToken };
+      return { user: data.user, token: accessToken, refreshToken };
     },
 
     // Google OAuth Login - Admin
@@ -453,8 +564,10 @@ const umsApi = {
       
       const data = await response.json();
       const accessToken = response.headers.get('x-access-token');
+      // Extract refreshToken from response body or headers
+      const refreshToken = data.refreshToken || response.headers.get('x-refresh-token') || response.headers.get('refresh-token');
       
-      return { user: data.user, token: accessToken };
+      return { user: data.user, token: accessToken, refreshToken };
     },
 
     // Faculty Email Login
@@ -472,12 +585,14 @@ const umsApi = {
       
       const data = await response.json();
       const token = response.headers.get('x-access-token');
+      // Extract refreshToken from response body or headers
+      const refreshToken = data.refreshToken || response.headers.get('x-refresh-token') || response.headers.get('refresh-token');
       
-      return { user: data.user, token };
+      return { user: data.user, token, refreshToken };
     },
 
     refresh: async (refreshToken: string) => {
-      return apiRequest(`${UMS_BASE_URL}/api/auth/refresh`, {
+      return apiRequest(`${UMS_BASE_URL}/ums/api/auth/refresh`, {
         method: 'POST',
         body: JSON.stringify({ refreshToken }),
       });
@@ -906,17 +1021,11 @@ const lmsApi = {
 };
 
 // Multimedia API functions
-// In development, use proxy to avoid CORS issues. In production, use direct URL.
 const getMMBaseURL = () => {
   if (import.meta.env.VITE_MULTIMEDIA_BASE_URL) {
     return import.meta.env.VITE_MULTIMEDIA_BASE_URL;
   }
-  // In development, use proxy if available
-  if (import.meta.env.DEV) {
-    return '/mm/v3'; // This will use the Vite proxy
-  }
-  // Production fallback
-  return 'https://prod-multimedia.polariscampus.com/mm/v3';
+  return 'http://localhost:5000/mm/v3';
 };
 
 const MM_BASE_URL = getMMBaseURL();
@@ -941,34 +1050,18 @@ const multimediaApi = {
       }, token);
     },
 
-    startSession: async (sessionId: number, facultyId: string, token: string) => {
+    startSession: async (sessionId: number, facultyId: string, batchId: number, facultyName: string, token: string) => {
       const url = `${MM_BASE_URL}/liveclass/session/start`;
-      console.log('🌐 Starting session request:', {
-        url,
-        sessionId,
-        facultyId,
-        hasToken: !!token,
-        mmBaseUrl: MM_BASE_URL
-      });
-      
       try {
         const response = await lmsApiRequest(url, {
           method: 'POST',
-          body: JSON.stringify({ sessionId, facultyId }),
+          body: JSON.stringify({ sessionId, facultyId, batchId, facultyName }),
           headers: {
             'Content-Type': 'application/json',
           },
         }, token);
-        console.log('✅ Start session response:', response);
         return response;
       } catch (error: any) {
-        console.error('❌ Start session error:', {
-          error,
-          message: error?.message,
-          url,
-          sessionId,
-          facultyId
-        });
         throw error;
       }
     },
@@ -977,6 +1070,78 @@ const multimediaApi = {
       return lmsApiRequest(`${MM_BASE_URL}/liveclass/session/${sessionId}/status`, {
         method: 'GET',
       }, token);
+    },
+
+    joinSession: async (sessionId: number, entityName: string | undefined, deviceDetails: any, token: string) => {
+      const url = `${MM_BASE_URL}/session/join`;
+      try {
+        const payload: any = {
+          sessionId,
+          deviceDetails: deviceDetails || {
+            deviceType: 'web',
+            deviceName: navigator.userAgent || 'Web Browser',
+            deviceVersion: navigator.appVersion || '1.0',
+          },
+        };
+        if (entityName) {
+          payload.entityName = entityName;
+        }
+        
+        // Check if token exists before making request
+        if (!token) {
+          const error: any = new Error('No authentication token available. Please login again.');
+          error.status = 401;
+          error.response = { status: 401 };
+          redirectToLogin();
+          throw error;
+        }
+        
+        // Use lmsApiRequest for multimedia service (simpler, no auto-refresh)
+        // Multimedia service requires both Authorization and x-access-token headers
+        const response = await lmsApiRequest(url, {
+          method: 'POST',
+          body: JSON.stringify(payload),
+          headers: {
+            'Content-Type': 'application/json',
+          },
+        }, token);
+        
+        return response;
+      } catch (error: any) {
+        // Log the actual error for debugging
+        console.error('Join session error:', {
+          message: error?.message,
+          status: error?.status || error?.response?.status,
+          statusText: error?.response?.statusText,
+          error: error
+        });
+        
+        // ONLY treat as auth error if we have a confirmed 401 status code
+        // Don't check error messages as they can be misleading
+        const statusCode = error?.status || error?.response?.status;
+        const isAuthError = statusCode === 401;
+        
+        // Don't modify non-auth errors - let them pass through with their original message
+        if (isAuthError) {
+          // Only for actual 401 errors
+          // DON'T call redirectToLogin() here - let the component handle it
+          // This prevents automatic page redirect which interrupts the error handling
+          const authError: any = new Error('Your session has expired. Please login again to join the session.');
+          authError.status = 401;
+          authError.response = { status: 401 };
+          throw authError;
+        }
+        
+        // For all other errors (400, 404, 500, network errors, etc.), pass through the original error
+        // This way users see the actual error message from the server
+        // Make sure status code is preserved
+        if (!error.status && !error.response?.status) {
+          error.status = statusCode;
+          if (!error.response) error.response = {};
+          error.response.status = statusCode;
+        }
+        throw error;
+      }
     },
 
     endSession: async (sessionId: number, facultyId: string, token: string) => {
@@ -1203,8 +1368,11 @@ export const useApi = () => {
         getAll: () => multimediaApi.sessions.getAll(token),
         getStats: () => multimediaApi.sessions.getStats(token),
         getUpcoming: () => multimediaApi.sessions.getUpcoming(token),
-        startSession: (sessionId: number, facultyId: string) => multimediaApi.sessions.startSession(sessionId, facultyId, token),
+        startSession: (sessionId: number, facultyId: string, batchId: number, facultyName: string) =>
+          multimediaApi.sessions.startSession(sessionId, facultyId, batchId, facultyName, token),
         getSessionStatus: (sessionId: string) => multimediaApi.sessions.getSessionStatus(sessionId, token),
+        joinSession: (sessionId: number, entityName?: string, deviceDetails?: any) => 
+          multimediaApi.sessions.joinSession(sessionId, entityName, deviceDetails, token),
         endSession: (sessionId: number, facultyId: string) => multimediaApi.sessions.endSession(sessionId, facultyId, token),
       },
       reports: {
