@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { User, Mail, BookOpen, Users, Calendar, Star, Award, TrendingUp, UserX, AlertTriangle, Clock, Loader2 } from 'lucide-react';
 import type { Mentor } from '../../types';
 import Modal from './Modal';
@@ -34,61 +34,6 @@ const MentorModal: React.FC<MentorModalProps> = ({ isOpen, onClose, mentor, mode
     rating: 0
   });
 
-  const [batches, setBatches] = useState<Array<{id: number, batch_name: string, academic_year: string, semester: number}>>([]);
-  const [courses, setCourses] = useState<Array<{id: number, course_name: string, course_code?: string}>>([]);
-  const [loadingBatches, setLoadingBatches] = useState(false);
-  const [loadingCourses, setLoadingCourses] = useState(false);
-  const [selectedCourseId, setSelectedCourseId] = useState<number>(1);
-
-  const programs = [
-    'Full Stack Development',
-    'Data Science Bootcamp',
-    'UI/UX Design Fundamentals',
-    'Machine Learning Advanced'
-  ];
-
-  // Fetch batches when modal opens
-  useEffect(() => {
-    if (isOpen && mode === 'add') {
-      fetchBatches();
-      fetchCourses();
-    }
-  }, [isOpen, mode]);
-
-  const fetchBatches = async () => {
-    try {
-      setLoadingBatches(true);
-      const response = await api.lms.adminMentors.getAllBatches();
-      if (response.batches) {
-        setBatches(response.batches);
-        // Set default to a known working batch ID
-        if (response.batches.length > 0) {
-          setEditData(prev => ({ ...prev, batch: response.batches[0].batch_name }));
-        }
-      }
-    } catch (error) {
-      // Error fetching batches
-    } finally {
-      setLoadingBatches(false);
-    }
-  };
-
-  const fetchCourses = async () => {
-    try {
-      setLoadingCourses(true);
-      // Fetch actual courses from the Live LMS backend
-      const response = await api.lms.adminMentors.getAllCourses();
-      if (response.courses) {
-        setCourses(response.courses);
-        // Use a known working course ID (Full Stack Development 2)
-        setSelectedCourseId(4);
-      }
-    } catch (error) {
-      // Error fetching courses
-    } finally {
-      setLoadingCourses(false);
-    }
-  };
 
   const expertiseOptions = [
     'React', 'Node.js', 'MongoDB', 'JavaScript', 'Python', 'Machine Learning',
@@ -120,26 +65,13 @@ const MentorModal: React.FC<MentorModalProps> = ({ isOpen, onClose, mentor, mode
           setError('Please select at least one expertise area');
           return;
         }
-        if (!editData.batch) {
-          setError('Please select a batch');
-          return;
-        }
-
-        // Find the selected batch ID
-        const selectedBatch = batches.find(batch => batch.batch_name === editData.batch);
-        if (!selectedBatch) {
-          setError('Please select a valid batch');
-          return;
-        }
 
         // Add new mentor using Live LMS adminMentors endpoint
         const result = await api.lms.adminMentors.addMentor({
           name: editData.name.trim(),
           email: editData.email.trim(),
           expertise: editData.expertise,
-          dateOfJoining: editData.joinDate || new Date().toISOString().split('T')[0],
-          courseId: selectedCourseId, // Use selected course ID
-          batchId: selectedBatch.id
+          dateOfJoining: editData.joinDate || new Date().toISOString().split('T')[0]
         });
 
         if (result.message === 'Faculty created successfully') {
@@ -280,59 +212,6 @@ const MentorModal: React.FC<MentorModalProps> = ({ isOpen, onClose, mentor, mode
                 className="w-full bg-gray-800 border border-gray-700 text-white rounded-lg px-3 py-2 focus:border-yellow-500 focus:outline-none"
                 placeholder="mentor@plarislabs.com"
               />
-            )}
-          </div>
-        </div>
-
-        {/* Program and Batch Information */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          <div>
-            <label className="block text-sm font-medium text-gray-300 mb-2">
-              Course
-            </label>
-            {mode === 'view' ? (
-              <div className="bg-gray-800 px-3 py-2 rounded-lg text-white">
-                {mentor?.program || 'N/A'}
-              </div>
-            ) : (
-              <select
-                value={selectedCourseId}
-                onChange={(e) => setSelectedCourseId(parseInt(e.target.value))}
-                className="w-full bg-gray-800 border border-gray-700 text-white rounded-lg px-3 py-2 focus:border-yellow-500 focus:outline-none"
-                disabled={loadingCourses}
-              >
-                <option value="">{loadingCourses ? 'Loading courses...' : 'Select Course'}</option>
-                {courses.map((course) => (
-                  <option key={course.id} value={course.id}>
-                    {course.course_name}
-                  </option>
-                ))}
-              </select>
-            )}
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-gray-300 mb-2">
-              Batch
-            </label>
-            {mode === 'view' ? (
-              <div className="bg-gray-800 px-3 py-2 rounded-lg text-white">
-                {mentor?.batch || 'N/A'}
-              </div>
-            ) : (
-              <select
-                value={editData.batch}
-                onChange={(e) => setEditData({ ...editData, batch: e.target.value })}
-                className="w-full bg-gray-800 border border-gray-700 text-white rounded-lg px-3 py-2 focus:border-yellow-500 focus:outline-none"
-                disabled={loadingBatches}
-              >
-                <option value="">{loadingBatches ? 'Loading batches...' : 'Select Batch'}</option>
-                {batches.map((batch) => (
-                  <option key={batch.id} value={batch.batch_name}>
-                    {batch.batch_name} ({batch.academic_year} - Semester {batch.semester})
-                  </option>
-                ))}
-              </select>
             )}
           </div>
         </div>
@@ -524,49 +403,23 @@ const MentorModal: React.FC<MentorModalProps> = ({ isOpen, onClose, mentor, mode
         )}
 
         {/* Additional Information */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          <div>
-            <label className="block text-sm font-medium text-gray-300 mb-2">
-              <Calendar className="w-4 h-4 inline mr-2" />
-              Join Date
-            </label>
-            {mode === 'view' ? (
-              <div className="bg-gray-800 px-3 py-2 rounded-lg text-white">
-                {mentor?.joinDate ? new Date(mentor.joinDate).toLocaleDateString() : 'N/A'}
-              </div>
-            ) : (
-              <input
-                type="date"
-                value={editData.joinDate}
-                onChange={(e) => setEditData({ ...editData, joinDate: e.target.value })}
-                className="w-full bg-gray-800 border border-gray-700 text-white rounded-lg px-3 py-2 focus:border-yellow-500 focus:outline-none"
-              />
-            )}
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-gray-300 mb-2">
-              Status
-            </label>
-            {mode === 'view' ? (
-              <div className="bg-gray-800 px-3 py-2 rounded-lg">
-                <span className={`inline-flex px-2 py-1 text-xs font-medium rounded-full ${
-                  mentor?.status === 'active' ? 'text-green-400 bg-green-400/10' : 'text-gray-400 bg-gray-400/10'
-                }`}>
-                  {mentor?.status?.charAt(0).toUpperCase() + mentor?.status?.slice(1) || 'N/A'}
-                </span>
-              </div>
-            ) : (
-              <select
-                value={editData.status}
-                onChange={(e) => setEditData({ ...editData, status: e.target.value as Mentor['status'] })}
-                className="w-full bg-gray-800 border border-gray-700 text-white rounded-lg px-3 py-2 focus:border-yellow-500 focus:outline-none"
-              >
-                <option value="active">Active</option>
-                <option value="inactive">Inactive</option>
-              </select>
-            )}
-          </div>
+        <div>
+          <label className="block text-sm font-medium text-gray-300 mb-2">
+            <Calendar className="w-4 h-4 inline mr-2" />
+            Join Date
+          </label>
+          {mode === 'view' ? (
+            <div className="bg-gray-800 px-3 py-2 rounded-lg text-white">
+              {mentor?.joinDate ? new Date(mentor.joinDate).toLocaleDateString() : 'N/A'}
+            </div>
+          ) : (
+            <input
+              type="date"
+              value={editData.joinDate}
+              onChange={(e) => setEditData({ ...editData, joinDate: e.target.value })}
+              className="w-full bg-gray-800 border border-gray-700 text-white rounded-lg px-3 py-2 focus:border-yellow-500 focus:outline-none"
+            />
+          )}
         </div>
 
         {/* Actions */}
