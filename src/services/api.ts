@@ -768,6 +768,14 @@ const lmsApi = {
       }, token);
     },
 
+    createMentorGroup: async (groupData: any, token: string) => {
+      return lmsApiRequest(`${LMS_BASE_URL}/api/v1/admin/mentors/createGroup`, {
+        method: 'POST',
+        body: JSON.stringify(groupData),
+        headers: { 'Content-Type': 'application/json' },
+      }, token);
+    },
+
     getAllSessions: async (mentorId: string, token: string) => {
       return lmsApiRequest(`${LMS_BASE_URL}/api/v1/admin/mentors/getAllSessions?facultyId=${mentorId}`, {
         method: 'GET',
@@ -1196,6 +1204,7 @@ export const useApi = () => {
         addMentor: (mentorData: any) => lmsApi.adminMentors.addMentor(mentorData, token),
         getAllBatches: () => lmsApi.adminMentors.getAllBatches(token),
         getAllCourses: () => lmsApi.adminMentors.getAllCourses(token),
+        createMentorGroup: (groupData: any) => lmsApi.adminMentors.createMentorGroup(groupData, token),
         getAllSessions: (mentorId: string) => lmsApi.adminMentors.getAllSessions(mentorId, token),
         getRescheduledSessions: () => lmsApi.adminMentors.getRescheduledSessions(token),
         getMentorReschedules: () => lmsApi.adminMentors.getMentorReschedules(token),
