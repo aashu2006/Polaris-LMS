@@ -4,7 +4,7 @@ export interface Program {
   cohort: string;
   mentors: number;
   sessions: number;
-  status: 'active' | 'inactive' | 'completed';
+  status: 'active' | 'inactive' | 'completed' | 'archived';
   startDate: string;
   endDate: string;
   assignedMentor?: {

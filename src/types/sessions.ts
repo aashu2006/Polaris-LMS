@@ -30,7 +30,6 @@ export interface UiSession {
   date: string;
   time: string;
   status: 'live' | 'rescheduled' | 'upcoming' | 'completed';
-  action: 'Join Now' | 'Calendar' | 'View';
+  action: 'Join Now' | 'Go Live' | 'Calendar' | 'View';
   note?: string;
 }
-

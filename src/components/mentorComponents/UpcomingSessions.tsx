@@ -5,14 +5,15 @@ import { HMSRoomProvider } from '@100mslive/react-sdk';
 import { useAuth } from '../../contexts/AuthContext';
 import { useApi } from '../../services/api';
 import LiveClassRoom from './LiveClassRoom';
-import type { ApiSession, UiSession } from '../../types/sessions';
+import type { UiSession } from '../../types/sessions';
+import type { ClassSessionWithDetails } from '../../lib/supabase';
+import { TutorSessionService } from '../../services/tutorSessionService';
 
 const UpcomingSessions: React.FC = () => {
   const api = useApi();
   const { user, token } = useAuth();
 
   const [sessions, setSessions] = useState<UiSession[]>([]);
-  const [batches, setBatches] = useState<Record<number, any>>({});
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -20,11 +21,7 @@ const UpcomingSessions: React.FC = () => {
   const [liveOpen, setLiveOpen] = useState<boolean>(false);
   const [sessionData, setSessionData] = useState<any>(null);
   const [startingSession, setStartingSession] = useState<boolean>(false);
-  const [sessionMap, setSessionMap] = useState<Map<number, ApiSession>>(new Map());
-
-  const BASE_URL = useMemo(() => {
-    return (import.meta as any).env?.VITE_SCHEDULE_BASE_URL || '<<base_url>>';
-  }, []);
+  const [sessionMap, setSessionMap] = useState<Map<number, ClassSessionWithDetails>>(new Map());
 
   const getNameFromToken = (t?: string | null): string | null => {
     if (!t) return null;
@@ -78,56 +75,54 @@ const UpcomingSessions: React.FC = () => {
           throw new Error('Missing faculty id');
         }
 
-        const [batchesResp, sessionsResp] = await Promise.all([
-          api.lms.mentors.getBatches().catch(() => ({ batches: [] })),
-          api.lms.mentors.getAllSessions(facultyId),
-        ]);
-
-        // Console log the sessions API response
-        console.log('📡 GET Sessions API Response:', {
-          full_response: sessionsResp,
-          sessions_count: sessionsResp?.data?.length || 0,
-          first_session_sample: sessionsResp?.data?.[0] || null,
-          has_batch_id: sessionsResp?.data?.[0]?.batch_id !== undefined,
-        });
-
-        const batchMap: Record<number, any> = {};
-        const batchesList = batchesResp?.batches || batchesResp || [];
-        if (Array.isArray(batchesList)) {
-          batchesList.forEach((batch: any) => {
-            const id = Number(batch?.id);
-            if (Number.isFinite(id)) {
-              batchMap[id] = batch;
-            }
-          });
-        }
-
-        const data: ApiSession[] = sessionsResp?.data ?? [];
+        const sessionsData = await TutorSessionService.getSessionsForFaculty(String(facultyId));
 
         const now = new Date();
+        const pastLimit = new Date(now.getTime() - 1 * 24 * 60 * 60 * 1000);
+        const futureLimit = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
 
-        const filtered = data.filter((s) => {
-          const dt = new Date(s.session_datetime);
-          const durationMinutes = Number(s.duration) || 0;
-          const end = new Date(dt.getTime() + durationMinutes * 60000);
-
-          const isLive = !!s.is_live && now >= dt && now <= end;
-
-          const apiStatus = (s.status || '').toLowerCase();
-          const isRescheduled = apiStatus === 'postponed' && dt > now;
-
-          return isLive || isRescheduled;
+        const withinWindow = sessionsData.filter((session) => {
+          const dt = session.session_datetime ? new Date(session.session_datetime) : null;
+          if (!dt) return false;
+          return dt >= pastLimit && dt <= futureLimit;
         });
 
-        const sessionMapLocal = new Map<number, ApiSession>();
-        const mapped: UiSession[] = filtered.map((s) => {
-          // Store original session data for later use
-          const sessionId = Number(s.id);
-          if (Number.isFinite(sessionId)) {
-            sessionMapLocal.set(sessionId, s);
+        const relevantSessions = withinWindow.filter((session) => {
+          const dt = session.session_datetime ? new Date(session.session_datetime) : null;
+          if (!dt) return false;
+
+          const durationMinutes =
+            Number(session.duration) && Number(session.duration) > 0 ? Number(session.duration) : 60;
+          const end = new Date(dt.getTime() + durationMinutes * 60000);
+
+          const status = (session.status || '').toLowerCase();
+          if (now > end) {
+            return false;
           }
 
-          const dt = new Date(s.session_datetime);
+          if (['cancelled'].includes(status)) {
+            return false;
+          }
+
+          if (status === 'postponed') {
+            return true;
+          }
+
+          if (now <= dt) {
+            return true;
+          }
+
+          return now >= dt && now <= end;
+        });
+
+        const sessionMapLocal = new Map<number, ClassSessionWithDetails>();
+        const mapped: UiSession[] = relevantSessions.map((session) => {
+          const sessionId = Number(session.id);
+          if (Number.isFinite(sessionId)) {
+            sessionMapLocal.set(sessionId, session);
+          }
+
+          const dt = new Date(session.session_datetime);
           const today = new Date();
           const isToday = dt.toDateString() === today.toDateString();
           const tomorrow = new Date(today);
@@ -136,33 +131,37 @@ const UpcomingSessions: React.FC = () => {
 
           const date = isToday
             ? 'Today'
-            : (isTomorrow ? 'Tomorrow' : dt.toLocaleDateString(undefined, { month: 'short', day: 'numeric' }));
+            : (isTomorrow
+              ? 'Tomorrow'
+              : dt.toLocaleDateString(undefined, { month: 'short', day: 'numeric' }));
           const time = dt.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' });
 
-          const durationMinutes = Number(s.duration) || 0;
+          const durationMinutes = Number(session.duration) && Number(session.duration) > 0 ? Number(session.duration) : 60;
           const end = new Date(dt.getTime() + durationMinutes * 60000);
           const nowInner = new Date();
 
-          if (!!s.is_live && nowInner >= dt && nowInner <= end) {
+          const apiStatus = (session.status || '').toLowerCase();
+          const isCurrentlyLive = nowInner >= dt && nowInner <= end;
+
+          if (nowInner > end) {
             return {
               id: sessionId,
-              title: s.course_name || `Session ${s.id}`,
-              instructor: '', // can map if API provides instructor later
-              subject: s.course_name || '',
+              title: session.course_name || session.title || `Session ${session.id}`,
+              instructor: session.faculty_name || '',
+              subject: session.course_name || '',
               date,
               time,
-              status: 'live',
-              action: 'Join Now',
+              status: 'completed',
+              action: 'Calendar',
             };
           }
 
-          const apiStatus = (s.status || '').toLowerCase();
-          if (apiStatus === 'postponed' && dt > nowInner) {
+          if (apiStatus === 'postponed') {
             return {
               id: sessionId,
-              title: s.course_name || `Session ${s.id}`,
-              instructor: '',
-              subject: s.course_name || '',
+              title: session.course_name || session.title || `Session ${session.id}`,
+              instructor: session.faculty_name || '',
+              subject: session.course_name || '',
               date,
               time,
               status: 'rescheduled',
@@ -171,23 +170,75 @@ const UpcomingSessions: React.FC = () => {
             };
           }
 
+          if (isCurrentlyLive) {
+            return {
+              id: sessionId,
+              title: session.course_name || session.title || `Session ${session.id}`,
+              instructor: session.faculty_name || '',
+              subject: session.course_name || '',
+              date,
+              time,
+              status: 'live',
+              action: 'Join Now',
+            };
+          }
+
+          if (dt > nowInner || apiStatus === 'upcoming' || apiStatus === 'scheduled' || apiStatus === 'created') {
+            return {
+              id: sessionId,
+              title: session.course_name || session.title || `Session ${session.id}`,
+              instructor: session.faculty_name || '',
+              subject: session.course_name || '',
+              date,
+              time,
+              status: 'upcoming',
+              action: 'Go Live',
+            };
+          }
+
           return {
             id: sessionId,
-            title: s.course_name || `Session ${s.id}`,
-            instructor: '',
-            subject: s.course_name || '',
+            title: session.course_name || session.title || `Session ${session.id}`,
+            instructor: session.faculty_name || '',
+            subject: session.course_name || '',
             date,
             time,
-            status: 'rescheduled',
+            status: 'completed',
             action: 'Calendar',
-            note: 'Rescheduled',
           };
         });
 
+        const upcomingOnly = mapped
+          .filter((session) => session.status === 'upcoming' || session.status === 'live')
+          .sort((a, b) => {
+            const originalA = sessionMapLocal.get(a.id);
+            const originalB = sessionMapLocal.get(b.id);
+            const dtA = originalA?.session_datetime ? new Date(originalA.session_datetime).getTime() : 0;
+            const dtB = originalB?.session_datetime ? new Date(originalB.session_datetime).getTime() : 0;
+            return dtA - dtB;
+          });
+
+        const completedSessions = mapped
+          .filter((session) => session.status === 'completed')
+          .sort((a, b) => {
+            const originalA = sessionMapLocal.get(a.id);
+            const originalB = sessionMapLocal.get(b.id);
+            const dtA = originalA?.session_datetime ? new Date(originalA.session_datetime).getTime() : 0;
+            const dtB = originalB?.session_datetime ? new Date(originalB.session_datetime).getTime() : 0;
+            return dtB - dtA;
+          });
+
+        const upcomingMap = new Map<number, ClassSessionWithDetails>();
+        upcomingOnly.forEach((session) => {
+          const original = sessionMapLocal.get(session.id);
+          if (original) {
+            upcomingMap.set(session.id, original);
+          }
+        });
+
         if (isMounted) {
-          setSessions(mapped);
-          setBatches(batchMap);
-          setSessionMap(sessionMapLocal);
+          setSessions(upcomingOnly);
+          setSessionMap(upcomingMap);
         }
       } catch (e: any) {
         if (isMounted) setError(e?.message || 'Failed to fetch sessions');
@@ -200,12 +251,14 @@ const UpcomingSessions: React.FC = () => {
     return () => {
       isMounted = false;
     };
-  }, [BASE_URL, token, user, api]);
+  }, [token, user]);
 
   const getStatusColor = (status: string) => {
     switch (status) {
       case 'live':
         return 'bg-red-900 text-red-300';
+      case 'upcoming':
+        return 'bg-blue-900 text-blue-200';
       case 'rescheduled':
         return 'bg-[#FFC540] text-black';
       default:
@@ -213,15 +266,17 @@ const UpcomingSessions: React.FC = () => {
     }
   };
 
-  const getActionColor = (action: string) => {
-    switch (action) {
-      case 'Join Now':
-        return 'bg-[#FFC540] text-black hover:bg-[#e6b139]';
-      case 'Calendar':
-        return 'bg-[#FFC540] text-black hover:bg-[#e6b139]';
-      default:
-        return 'bg-gray-700 text-white hover:bg-gray-600';
+  const getActionColor = (status: UiSession['status']) => {
+    if (status === 'live') {
+      return 'bg-[#FFC540] text-black hover:bg-[#e6b139]';
     }
+    if (status === 'upcoming') {
+      return 'bg-green-500 text-white hover:bg-green-600';
+    }
+    if (status === 'rescheduled') {
+      return 'bg-[#FFC540] text-black hover:bg-[#e6b139]';
+    }
+    return 'bg-gray-700 text-white hover:bg-gray-600';
   };
 
   const formatStatusDisplay = (status: string): string => {
@@ -267,49 +322,60 @@ const UpcomingSessions: React.FC = () => {
         throw new Error('Session data not found');
       }
 
-      console.log('📋 Session data (for batchId debug):', {
-        id: originalSession?.id,
-        batch_id: originalSession?.batch_id,
-        section_id: originalSession?.section_id,
-        course_id: originalSession?.course_id,
-        course_sections: originalSession?.course_sections,
-      });
-
-      const batchName = (originalSession as any)?.batch_name || (originalSession as any)?.cohort;
+      const batchName =
+        originalSession?.batch?.batch_name ||
+        (originalSession as any)?.batch_name ||
+        (originalSession as any)?.cohort ||
+        session.title;
 
       let batchId: number | undefined;
+      const sessionBatchId = (originalSession as any)?.batch_id;
 
-      // Priority 1: Direct batch_id from API response
-      if (Number.isFinite(originalSession?.batch_id) && (originalSession?.batch_id ?? 0) > 0) {
-        batchId = Number(originalSession.batch_id);
-        console.log('✅ Using batch_id directly from API response:', batchId);
-      }
-      
-      // Priority 2: Match by batch_name with fetched batches
-      if ((!Number.isFinite(batchId) || (batchId ?? 0) <= 0) && batchName && Object.keys(batches).length > 0) {
-        const matched = Object.entries(batches).find(([_, batch]) => {
-          const name = (batch as any)?.batch_name || (batch as any)?.name;
-          return typeof name === 'string' && name.trim().toLowerCase() === String(batchName).trim().toLowerCase();
-        });
-        if (matched) {
-          batchId = Number(matched[0]);
-          console.log('✅ Using batch_id from batch name match:', batchId);
-        }
+      if (Number.isFinite(originalSession?.batch?.id)) {
+        batchId = Number(originalSession?.batch?.id);
       }
 
-      // Priority 3: Error if no batch_id found
+      if ((!Number.isFinite(batchId) || (batchId ?? 0) <= 0) && Number.isFinite(originalSession?.section?.batch_id)) {
+        batchId = Number(originalSession?.section?.batch_id);
+      }
+
+      if ((!Number.isFinite(batchId) || (batchId ?? 0) <= 0) && Number.isFinite(sessionBatchId)) {
+        batchId = Number(sessionBatchId);
+      }
+
       if (!Number.isFinite(batchId) || (batchId ?? 0) <= 0) {
         console.error('❌ BatchId extraction failed:', {
-          batch_id: originalSession?.batch_id,
+          session_batch_id: sessionBatchId,
+          supabase_batch_id: originalSession?.batch?.id,
+          section_batch_id: originalSession?.section?.batch_id,
           batch_name: batchName,
-          batches_available: Object.keys(batches).length,
         });
         throw new Error('Missing batch/section ID - API must provide batch_id in session response');
       }
 
-      const facultyName = displayName || user?.name || originalSession?.faculty_name || 'Faculty';
+      const facultyName =
+        displayName ||
+        user?.name ||
+        originalSession?.faculty_name ||
+        originalSession?.profiles?.name ||
+        'Faculty';
 
       const response = await api.multimedia.sessions.startSession(session.id, facultyId, Number(batchId), facultyName);
+
+      const startSuccess =
+        response?.success ??
+        response?.data?.success ??
+        (typeof response?.status === 'string' ? response.status.toLowerCase() === 'success' : undefined);
+
+      if (startSuccess === false) {
+        const serverMessage =
+          response?.message ||
+          response?.error ||
+          response?.data?.message ||
+          response?.data?.error ||
+          'Failed to start session';
+        throw new Error(serverMessage);
+      }
       
       // Handle different response structures
       let authToken = null;
@@ -336,16 +402,25 @@ const UpcomingSessions: React.FC = () => {
         throw new Error('No auth token received from server. Please check API response.');
       }
 
+      const detectedRoomId =
+        responseData?.hms?.roomId ||
+        responseData?.hms?.room_id ||
+        responseData?.roomId ||
+        responseData?.room_id ||
+        response?.roomId ||
+        response?.room_id;
+
       setSessionData({
         sessionId: session.id,
         facultyId: facultyId,
         batchId,
         facultyName,
-        batchName: session.title,
+        batchName,
         courseName: session.subject,
         hms: {
           authToken: authToken,
         },
+        roomId: detectedRoomId,
       });
       setLiveOpen(true);
     } catch (e: any) {
@@ -357,7 +432,16 @@ const UpcomingSessions: React.FC = () => {
     }
   };
 
-  const closeLive = () => {
+  const closeLive = (options?: { sessionId?: number }) => {
+    if (options?.sessionId !== undefined) {
+      const endedId = options.sessionId;
+      setSessions((prev) => prev.filter((session) => session.id !== endedId));
+      setSessionMap((prev) => {
+        const next = new Map(prev);
+        next.delete(endedId);
+        return next;
+      });
+    }
     setSessionData(null);
     setLiveOpen(false);
   };
@@ -432,16 +516,24 @@ const UpcomingSessions: React.FC = () => {
                         onClick={(e) => {
                           e.preventDefault();
                           e.stopPropagation();
-                          if (session.action === 'Join Now') {
+                          if (session.status === 'live' || session.status === 'upcoming') {
                             openLive(session);
                           }
                         }}
                         disabled={startingSession}
-                        className={`flex items-center space-x-2 px-4 py-2 rounded-lg transition-colors duration-200 ${getActionColor(session.action)} ${startingSession ? 'opacity-50 cursor-not-allowed' : ''}`}
+                        className={`flex items-center space-x-2 px-4 py-2 rounded-lg transition-colors duration-200 ${getActionColor(session.status)} ${startingSession ? 'opacity-50 cursor-not-allowed' : ''}`}
                       >
-                        {session.action === 'Join Now' && <Video className="h-4 w-4" />}
-                        {session.action === 'Calendar' && <Calendar className="h-4 w-4" />}
-                        <span>{startingSession ? 'Starting...' : session.action}</span>
+                        {session.status === 'live' && <Video className="h-4 w-4" />}
+                        {session.status !== 'live' && <Video className="h-4 w-4" />}
+                        <span>
+                          {startingSession
+                            ? 'Starting...'
+                            : session.status === 'live'
+                              ? 'Join Now'
+                              : session.status === 'upcoming'
+                                ? 'Go Live'
+                                : 'Calendar'}
+                        </span>
                       </button>
                     </div>
                   </div>
