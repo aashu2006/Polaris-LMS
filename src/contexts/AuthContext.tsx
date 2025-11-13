@@ -40,25 +40,59 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   const [refreshToken, setRefreshToken] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 
+  const decodeUserFromToken = (jwtToken: string | null): User | null => {
+    if (!jwtToken) return null;
+    try {
+      const parts = jwtToken.split('.');
+      if (parts.length < 2) return null;
+      const base64 = parts[1].replace(/-/g, '+').replace(/_/g, '/');
+      const payload = JSON.parse(atob(base64));
+
+      const id = payload?.id || payload?.userId || payload?.sub;
+      const email = payload?.email || payload?.mail || '';
+      const name = payload?.name || payload?.username || payload?.preferred_username || '';
+      const rawType = payload?.userType || payload?.user_type || payload?.role || payload?.userRole;
+
+      if (!id || !rawType) {
+        return null;
+      }
+
+      const normalizedType = String(rawType).toLowerCase();
+      if (normalizedType !== 'student' && normalizedType !== 'faculty' && normalizedType !== 'admin') {
+        return null;
+      }
+
+      return {
+        id: String(id),
+        email: String(email || ''),
+        name: String(name || ''),
+        userType: normalizedType as User['userType'],
+      };
+    } catch (error) {
+      console.error('Failed to decode user from token:', error);
+    }
+    return null;
+  };
+
   useEffect(() => {
     // Check for stored authentication data on app load
     const storedToken = localStorage.getItem('accessToken') || localStorage.getItem('auth_token');
     const storedRefreshToken = localStorage.getItem('refreshToken');
-    const storedUser = localStorage.getItem('auth_user');
 
-
-    if (storedToken && storedUser) {
+    if (storedToken) {
       try {
         setToken(storedToken);
         if (storedRefreshToken) {
           setRefreshToken(storedRefreshToken);
         }
-        setUser(JSON.parse(storedUser));
+        const decodedUser = decodeUserFromToken(storedToken);
+        if (decodedUser) {
+          setUser(decodedUser);
+        }
       } catch (error) {
         localStorage.removeItem('auth_token');
         localStorage.removeItem('accessToken');
         localStorage.removeItem('refreshToken');
-        localStorage.removeItem('auth_user');
       }
     }
     setLoading(false);
@@ -73,7 +107,6 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     }
     localStorage.setItem('accessToken', authToken);
     localStorage.setItem('auth_token', authToken); // Keep for backward compatibility
-    localStorage.setItem('auth_user', JSON.stringify(userData));
   };
 
   const logout = () => {
@@ -84,7 +117,6 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     localStorage.removeItem('auth_token');
     localStorage.removeItem('accessToken');
     localStorage.removeItem('refreshToken');
-    localStorage.removeItem('auth_user');
 
     // Navigate based on user type
     if (currentUser?.userType === 'admin') {

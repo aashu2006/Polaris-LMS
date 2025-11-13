@@ -2,7 +2,7 @@ import React from 'react';
 import AuthForm from '../components/adminComponents/AuthForm';
 
 interface FacultyPageProps {
-  onLogin: (user: any, token: string) => void;
+  onLogin: (user: any, token: string, refreshToken?: string) => void;
 }
 
 const FacultyPage: React.FC<FacultyPageProps> = ({ onLogin }) => {

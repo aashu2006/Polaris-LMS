@@ -2,7 +2,7 @@ import React from 'react';
 import AuthForm from '../components/adminComponents/AuthForm';
 
 interface StudentPageProps {
-  onLogin: (user: any, token: string) => void;
+  onLogin: (user: any, token: string, refreshToken?: string) => void;
 }
 
 const StudentPage: React.FC<StudentPageProps> = ({ onLogin }) => {

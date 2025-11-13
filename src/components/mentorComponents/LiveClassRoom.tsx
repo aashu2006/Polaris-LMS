@@ -1,4 +1,4 @@
-import { useEffect, useState, useRef } from 'react'
+import { useEffect, useState, useRef, useMemo } from 'react'
 import {
   useHMSActions,
   useHMSStore,
@@ -7,6 +7,17 @@ import {
   selectIsLocalAudioEnabled,
   selectIsLocalVideoEnabled,
 } from '@100mslive/react-sdk'
+import {
+  GraduationCap,
+  Mic,
+  MicOff,
+  PhoneOff,
+  ScreenShare,
+  ScreenShareOff,
+  Users,
+  Video,
+  VideoOff,
+} from 'lucide-react'
 import { useApi } from '../../services/api'
 import './LiveClassRoom.css'
 
@@ -20,7 +31,7 @@ interface LiveClassRoomProps {
       authToken: string
     }
   }
-  onClose: () => void
+  onClose: (options?: { sessionId?: number }) => void
 }
 
 const LiveClassRoom: React.FC<LiveClassRoomProps> = ({ sessionData, onClose }) => {
@@ -37,7 +48,12 @@ const LiveClassRoom: React.FC<LiveClassRoomProps> = ({ sessionData, onClose }) =
   const [isScreenSharing, setIsScreenSharing] = useState(false)
   const [isLeaving, setIsLeaving] = useState(false)
   const [connectionEstablished, setConnectionEstablished] = useState(false)
-  
+  const [showParticipants, setShowParticipants] = useState(false)
+  const visiblePeers = useMemo(
+    () => peers.filter(peer => !peer.isAuxiliary),
+    [peers]
+  )
+
   const joinAttemptedRef = useRef(false)
   const connectionTimeoutRef = useRef<NodeJS.Timeout | null>(null)
   const fallbackCheckRef = useRef<NodeJS.Timeout | null>(null)
@@ -52,12 +68,6 @@ const LiveClassRoom: React.FC<LiveClassRoomProps> = ({ sessionData, onClose }) =
     const actuallyConnected = isConnected || connectionEstablished || peers.length > 0
     
     if (actuallyConnected && isJoining) {
-      console.log('✅ Successfully connected to room', {
-        isConnected,
-        connectionEstablished,
-        peersCount: peers.length,
-        peerNames: peers.map(p => p.name)
-      })
       if (connectionTimeoutRef.current) {
         clearTimeout(connectionTimeoutRef.current)
         connectionTimeoutRef.current = null
@@ -76,9 +86,6 @@ const LiveClassRoom: React.FC<LiveClassRoomProps> = ({ sessionData, onClose }) =
   
   useEffect(() => {
     if (peers.length > 0 && isJoining && !connectionEstablished) {
-      console.log('🔍 Detected peers but connection not marked - setting connectionEstablished', {
-        peersCount: peers.length
-      })
       setConnectionEstablished(true)
     }
   }, [peers.length, isJoining, connectionEstablished])
@@ -108,17 +115,10 @@ const LiveClassRoom: React.FC<LiveClassRoomProps> = ({ sessionData, onClose }) =
 
   const joinRoom = async (authToken: string) => {
     try {
-      console.log('🚀 Attempting to join room...')
-      
       let checkCount = 0
       const maxChecks = 5
       checkIntervalRef.current = setInterval(() => {
         checkCount++
-        console.log(`🔍 Connection check ${checkCount}/${maxChecks}...`, {
-          isConnected,
-          peersCount: peers.length,
-          connectionEstablished
-        })
         
         if (checkCount >= maxChecks) {
           if (checkIntervalRef.current) {
@@ -155,14 +155,11 @@ const LiveClassRoom: React.FC<LiveClassRoomProps> = ({ sessionData, onClose }) =
         userName: sessionData?.batchName || 'Tutor'
       })
       
-      console.log('📡 Join request sent, waiting for connection...')
-
       if (uiFallbackRef.current) {
         clearTimeout(uiFallbackRef.current)
       }
       uiFallbackRef.current = setTimeout(() => {
         if (isJoining) {
-          console.warn('⏳ UI fallback triggered after 12s; revealing UI while connection finalizes.')
           setIsJoining(false)
         }
       }, 12000)
@@ -237,7 +234,6 @@ const LiveClassRoom: React.FC<LiveClassRoomProps> = ({ sessionData, onClose }) =
         /denied|permission|cancel/i.test(message)
 
       if (isUserCancel) {
-        console.warn('Screen share was cancelled/denied by the user.')
         setIsScreenSharing(false)
         return
       }
@@ -253,15 +249,19 @@ const LiveClassRoom: React.FC<LiveClassRoomProps> = ({ sessionData, onClose }) =
     setIsLeaving(true)
     
     try {
-      console.log('🛑 Ending session via API...')
       await api.multimedia.sessions.endSession(sessionData.sessionId, sessionData.facultyId)
-      console.log('✅ Session ended successfully via API')
     } catch (err: any) {
-      console.error('❌ Error ending session:', err.response?.data?.message || err.message)
+      console.error('❌ Error ending Multimedia session:', err.response?.data?.message || err.message)
+    }
+
+    try {
+      await api.lms.sessions.markComplete(sessionData.sessionId)
+    } catch (markErr: any) {
+      console.error('⚠️ Failed to mark session complete in LMS:', markErr?.response?.data?.message || markErr?.message)
     }
     
     await hmsActions.leave()
-    onClose()
+    onClose({ sessionId: sessionData.sessionId })
   }
 
   if (error) {
@@ -295,18 +295,21 @@ const LiveClassRoom: React.FC<LiveClassRoomProps> = ({ sessionData, onClose }) =
           <span className="live-badge">● LIVE</span>
         </div>
         <div className="room-stats">
-          <span className="peer-count">👥 {peers.length} participants</span>
+          <span className="peer-count icon-text">
+            <Users size={18} />
+            <span>{visiblePeers.length} participants</span>
+          </span>
         </div>
       </div>
 
       <div className="video-container">
-        {peers.length === 0 ? (
+        {visiblePeers.length === 0 ? (
           <div className="no-peers">
             <p>Waiting for students to join...</p>
           </div>
         ) : (
           <div className="video-grid">
-            {peers.map((peer) => (
+            {visiblePeers.map((peer) => (
               <div key={peer.id} className="video-tile">
                 <video
                   autoPlay
@@ -322,7 +325,9 @@ const LiveClassRoom: React.FC<LiveClassRoomProps> = ({ sessionData, onClose }) =
                 <div className="peer-info">
                   <span className="peer-name">{peer.name}</span>
                   {!peer.audioTrack && (
-                    <span className="muted-indicator">🔇</span>
+                    <span className="muted-indicator">
+                      <MicOff size={18} />
+                    </span>
                   )}
                 </div>
               </div>
@@ -336,21 +341,28 @@ const LiveClassRoom: React.FC<LiveClassRoomProps> = ({ sessionData, onClose }) =
           onClick={toggleAudio}
           className={`control-btn ${!isLocalAudioEnabled ? 'disabled' : ''}`}
         >
-          {isLocalAudioEnabled ? '🎤' : '🔇'}
+          {isLocalAudioEnabled ? <Mic size={24} /> : <MicOff size={24} />}
         </button>
 
         <button
           onClick={toggleVideo}
           className={`control-btn ${!isLocalVideoEnabled ? 'disabled' : ''}`}
         >
-          {isLocalVideoEnabled ? '📹' : '🚫'}
+          {isLocalVideoEnabled ? <Video size={24} /> : <VideoOff size={24} />}
         </button>
 
         <button
           onClick={toggleScreenShare}
           className={`control-btn ${isScreenSharing ? 'active' : ''}`}
         >
-          {isScreenSharing ? '🖥️' : '📺'}
+          {isScreenSharing ? <ScreenShare size={24} /> : <ScreenShareOff size={24} />}
+        </button>
+
+        <button
+          onClick={() => setShowParticipants(prev => !prev)}
+          className={`control-btn participants-btn ${showParticipants ? 'active' : ''}`}
+        >
+          <Users size={24} />
         </button>
 
         <button 
@@ -358,7 +370,14 @@ const LiveClassRoom: React.FC<LiveClassRoomProps> = ({ sessionData, onClose }) =
           className="control-btn leave-btn"
           disabled={isLeaving}
         >
-          {isLeaving ? '🛑 Ending...' : '📞 End Session'}
+          {isLeaving ? (
+            'Ending...'
+          ) : (
+            <>
+              <PhoneOff size={20} />
+              <span>End Session</span>
+            </>
+          )}
         </button>
       </div>
 
@@ -367,6 +386,41 @@ const LiveClassRoom: React.FC<LiveClassRoomProps> = ({ sessionData, onClose }) =
           ⏺ This session is being recorded
         </p>
       </div>
+
+      {showParticipants && (
+        <>
+          <div className="participants-overlay" onClick={() => setShowParticipants(false)} />
+          <aside className="participants-sidebar">
+            <div className="participants-header">
+              <span>Participants ({visiblePeers.length})</span>
+              <button className="close-btn" onClick={() => setShowParticipants(false)}>✕</button>
+            </div>
+            <ul className="participants-list">
+              {visiblePeers.map((peer) => (
+                <li key={`mentor-participant-${peer.id}`}>
+                  <span className="participant-name">
+                    {peer.name}
+                    {peer.roleName === 'tutor' && (
+                      <GraduationCap size={16} className="icon-inline" />
+                    )}
+                    {peer.isLocal && ' (You)'}
+                  </span>
+                  <span className="participant-status">
+                    <span className="icon-label">
+                      {peer.audioTrack ? <Mic size={14} /> : <MicOff size={14} />}
+                      <span>{peer.audioTrack ? 'On' : 'Muted'}</span>
+                    </span>
+                    <span className="icon-label">
+                      {peer.videoTrack ? <Video size={14} /> : <VideoOff size={14} />}
+                      <span>{peer.videoTrack ? 'On' : 'Off'}</span>
+                    </span>
+                  </span>
+                </li>
+              ))}
+            </ul>
+          </aside>
+        </>
+      )}
     </div>
   )
 }

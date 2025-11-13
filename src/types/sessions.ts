@@ -13,7 +13,13 @@ export interface ApiSession {
   created_at?: string;
   rescheduled_date_time?: string | null;
   rescheduled_count?: number | null;
-  [key: string]: any; // Allow additional properties
+  batch_id?: number;                    
+  batch_name?: string;                  
+  cohort?: string;                      
+  faculty_name?: string;                
+  course_code?: string;                 
+  course_sections?: any;                
+  [key: string]: any;                   
 }
 
 export interface UiSession {
@@ -24,7 +30,6 @@ export interface UiSession {
   date: string;
   time: string;
   status: 'live' | 'rescheduled' | 'upcoming' | 'completed';
-  action: 'Join Now' | 'Calendar' | 'View';
+  action: 'Join Now' | 'Go Live' | 'Calendar' | 'View';
   note?: string;
 }
-

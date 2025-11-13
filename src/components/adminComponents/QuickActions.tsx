@@ -25,15 +25,15 @@ const QuickActions: React.FC<QuickActionsProps> = ({
       bgColor: '#ffc540'
     },
     {
-      title: 'Create Program',
-      description: 'Set up a new learning program',
+      title: 'Create Batch',
+      description: 'Set up a new learning batch',
       icon: BookOpen,
       onClick: onCreateProgram,
       color: 'bg-gray-700 hover:bg-gray-600'
     },
     {
-      title: 'Create Group',
-      description: 'Set up a new learning group',
+      title: 'Create Program',
+      description: 'Set up a new learning program',
       icon: Users,
       onClick: onCreateGroup,
       color: 'bg-gray-700 hover:bg-gray-600'

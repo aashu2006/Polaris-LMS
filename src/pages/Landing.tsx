@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { BookOpen, Users, GraduationCap, Shield, ArrowRight } from 'lucide-react';
 
 interface LandingProps {
-  onLogin: (user: any, token: string) => void;
+  onLogin: (user: any, token: string, refreshToken?: string) => void;
 }
 
 const Landing: React.FC<LandingProps> = () => {
