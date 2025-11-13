@@ -4,7 +4,7 @@ import { publicAuthApi } from '../../services/api';
 
 interface AuthFormProps {
   userType: 'student' | 'faculty' | 'admin';
-  onLogin: (user: any, token: string) => void;
+  onLogin: (user: any, token: string, refreshToken?: string) => void;
 }
 
 const AuthForm: React.FC<AuthFormProps> = ({ userType, onLogin }) => {
@@ -86,7 +86,7 @@ const AuthForm: React.FC<AuthFormProps> = ({ userType, onLogin }) => {
       const result = await authFunction(mockToken);
 
       if (result.token) {
-        onLogin(result.user, result.token);
+        onLogin(result.user, result.token, result.refreshToken);
       } else {
         throw new Error('No authentication token received');
       }
@@ -112,7 +112,7 @@ const AuthForm: React.FC<AuthFormProps> = ({ userType, onLogin }) => {
         : await publicAuthApi.login(credentials);
 
       if (result.token) {
-        onLogin(result.user, result.token);
+        onLogin(result.user, result.token, result.refreshToken);
       } else {
         throw new Error('No authentication token received');
       }
