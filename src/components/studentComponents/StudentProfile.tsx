@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { Calendar, Video, FileText, Github, Award, Clock, Users, BookOpen, PlayCircle, CheckCircle, AlertCircle, Upload, File, X, Mail, Phone, Briefcase, User, ChevronDown, LogOut, Settings } from 'lucide-react';
 import { useApi } from '../../services/api';
 import { useAuth } from '../../contexts/AuthContext';
@@ -15,6 +15,7 @@ interface UpcomingClass {
   rescheduled?: boolean;
   originalDate?: string;
   epoch?: number; // timestamp for sorting/filtering
+  joinUrl?: string;
 }
 
 interface Recording {
@@ -71,6 +72,9 @@ const StudentProfile = () => {
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [selectedProgram, setSelectedProgram] = useState('React.js');
   const [selectedFileType, setSelectedFileType] = useState('Assignment');
+  const [joinError, setJoinError] = useState<string | null>(null);
+  const [showErrorModal, setShowErrorModal] = useState(false);
+  const [isJoiningSession, setIsJoiningSession] = useState(false);
   const [uploadedFiles, setUploadedFiles] = useState<UploadedFile[]>([
     {
       id: '1',
@@ -94,12 +98,14 @@ const StudentProfile = () => {
   const [allClasses, setAllClasses] = useState<UpcomingClass[]>([]);
   const [loadingClasses, setLoadingClasses] = useState<boolean>(true);
   const [classesError, setClassesError] = useState<string | null>(null);
+  const liveStatusCacheRef = useRef<Record<string, { status: 'live' | 'not_live'; lastChecked: number }>>({});
 
   // Pagination state
   const [upcomingPage, setUpcomingPage] = useState<number>(1);
   const [upcomingPageSize] = useState<number>(5);
   const [schedulePage, setSchedulePage] = useState<number>(1);
   const [schedulePageSize] = useState<number>(10);
+  const [refreshingSchedule, setRefreshingSchedule] = useState(false);
 
   const handleFileSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
     if (event.target.files && event.target.files[0]) {
@@ -133,39 +139,38 @@ const StudentProfile = () => {
     setUploadedFiles(uploadedFiles.filter(file => file.id !== fileId));
   };
 
-  // Fetch class schedule from API
-  useEffect(() => {
-    let mounted = true;
-    const fetchClassSchedule = async () => {
+  const fetchClassSchedule = useCallback(
+    async (silent: boolean = false) => {
       try {
-        setLoadingClasses(true);
+        if (!silent) {
+          setLoadingClasses(true);
+        }
+        if (silent) {
+          setRefreshingSchedule(true);
+        }
         setClassesError(null);
+
+        // Fetch all sessions (both scheduled and potentially live)
         const response = await api.lms.students.getClassSchedule();
-        console.log("response: ", response );
 
         if (response && response.success === false) {
           throw new Error(response.error || 'Failed to fetch class schedule');
         }
-        const data = (response && Array.isArray(response)) ? response : (response?.data || []);
-        
-        // Map API response to UpcomingClass format
+
+        const data = Array.isArray(response) ? response : response?.data || [];
+        const now = new Date();
+
         const mapped: UpcomingClass[] = data.map((s: any) => {
           const dt = s.session_datetime ? new Date(s.session_datetime) : null;
-          const today = new Date();
-          today.setHours(0, 0, 0, 0);
-          const sessionDate = dt ? new Date(dt) : null;
-          if (sessionDate) {
-            sessionDate.setHours(0, 0, 0, 0);
-          }
-          
-          // Format date display
+          const durationMinutes = Number(s.duration) && Number(s.duration) > 0 ? Number(s.duration) : 60;
+          const endTime = dt ? new Date(dt.getTime() + durationMinutes * 60000) : null;
+
           let dateDisplay = '';
           if (dt) {
-            const now = new Date();
             const sessionTime = dt.getTime();
             const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
             const tomorrowStart = todayStart + 24 * 60 * 60 * 1000;
-            
+
             if (sessionTime >= todayStart && sessionTime < tomorrowStart) {
               dateDisplay = 'Today';
             } else if (sessionTime >= tomorrowStart && sessionTime < tomorrowStart + 24 * 60 * 60 * 1000) {
@@ -174,21 +179,22 @@ const StudentProfile = () => {
               dateDisplay = dt.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
             }
           }
-          
-          // Format time display
+
           const timeDisplay = dt ? dt.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true }) : '';
-          
-          // Determine status
+
           const rawStatus = (s.status || '').toLowerCase();
-          let status: UpcomingClass['status'] = 'completed';
-          if (rawStatus === 'upcoming' || rawStatus === 'scheduled') {
-            status = 'upcoming';
-          } else if (rawStatus === 'live') {
-            status = 'live';
-          } else if (rawStatus === 'postponed') {
+          let status: UpcomingClass['status'] = 'upcoming';
+
+          if (rawStatus === 'postponed') {
             status = 'postponed';
+          } else if (rawStatus === 'completed' || rawStatus === 'ended') {
+            status = 'completed';
+          } else if (dt && endTime && now > endTime) {
+            status = 'completed';
+          } else if (!dt) {
+            status = 'upcoming';
           }
-          
+
           return {
             id: String(s.session_id || s.id || Date.now()),
             title: s.course_name || 'Session',
@@ -196,48 +202,177 @@ const StudentProfile = () => {
             program: s.course_name || '',
             date: dateDisplay,
             time: timeDisplay,
-            duration: `${s.duration || 60} min`,
+            duration: `${durationMinutes} min`,
             status,
             rescheduled: rawStatus === 'postponed',
             epoch: dt ? dt.getTime() : 0,
+            joinUrl: s.join_url || s.hms_join_url || s.live_url || s.meeting_url || s.url,
           } as UpcomingClass;
         });
-        
-        if (mounted) {
-          setAllClasses(mapped);
+
+        const liveIds = new Set<string>();
+        const nowMillis = now.getTime();
+        const CACHE_TTL = 60 * 1000; // 1 minute cache for status checks
+
+        for (const session of mapped) {
+          const sessionIdStr = String(session.id);
+          const durationMinutes = Number(session.duration?.replace(' min', '')) || 0;
+          const startEpoch = session.epoch && session.epoch > 0 ? session.epoch : null;
+          const endEpoch = startEpoch ? startEpoch + durationMinutes * 60000 : null;
+          const minutesUntilStart =
+            startEpoch !== null ? (startEpoch - nowMillis) / 60000 : null;
+          const minutesSinceEnd =
+            endEpoch !== null ? (nowMillis - endEpoch) / 60000 : null;
+
+          const cacheEntry = liveStatusCacheRef.current[sessionIdStr];
+          const recentlyChecked =
+            cacheEntry ? nowMillis - cacheEntry.lastChecked < CACHE_TTL : false;
+          const shouldRecheckNearStart =
+            minutesUntilStart !== null && minutesUntilStart <= 2 && minutesUntilStart >= -15;
+          const shouldRecheckRecentlyEnded =
+            minutesSinceEnd !== null && minutesSinceEnd >= -5 && minutesSinceEnd <= 10;
+
+          if (session.status === 'live') {
+            liveIds.add(sessionIdStr);
+            liveStatusCacheRef.current[sessionIdStr] = { status: 'live', lastChecked: nowMillis };
+            continue;
+          }
+
+          if (session.status === 'completed' || session.status === 'postponed') {
+            liveStatusCacheRef.current[sessionIdStr] = { status: 'not_live', lastChecked: nowMillis };
+            continue;
+          }
+
+          const original = data.find(
+            (raw: any) => String(raw.session_id || raw.id) === String(session.id)
+          );
+
+          const rawStatus = (original?.status || '').toLowerCase();
+          if (rawStatus === 'live' || rawStatus === 'started' || rawStatus === 'active') {
+            liveIds.add(sessionIdStr);
+            liveStatusCacheRef.current[sessionIdStr] = { status: 'live', lastChecked: nowMillis };
+            continue;
+          }
+
+          if (startEpoch && endEpoch && nowMillis >= startEpoch && nowMillis <= endEpoch) {
+            liveIds.add(sessionIdStr);
+            liveStatusCacheRef.current[sessionIdStr] = { status: 'live', lastChecked: nowMillis };
+            continue;
+          }
+
+          if (minutesSinceEnd !== null && minutesSinceEnd > 10) {
+            liveStatusCacheRef.current[sessionIdStr] = { status: 'not_live', lastChecked: nowMillis };
+            continue;
+          }
+
+          if (cacheEntry) {
+            if (cacheEntry.status === 'live') {
+              liveIds.add(sessionIdStr);
+              continue;
+            }
+
+            if (
+              cacheEntry.status === 'not_live' &&
+              !shouldRecheckNearStart &&
+              !shouldRecheckRecentlyEnded
+            ) {
+              continue;
+            }
+
+            if (recentlyChecked && !shouldRecheckNearStart && !shouldRecheckRecentlyEnded) {
+              continue;
+            }
+          }
+
+          try {
+            const statusResponse = await api.multimedia.sessions.getSessionStatus(sessionIdStr);
+            const responseStatus =
+              statusResponse?.data?.status ||
+              statusResponse?.status ||
+              statusResponse?.data?.data?.status ||
+              statusResponse?.data?.session_status;
+
+            const multimediaStatus =
+              typeof responseStatus === 'string' ? responseStatus.toLowerCase() : '';
+            if (['live', 'started', 'active'].includes(multimediaStatus)) {
+              liveIds.add(sessionIdStr);
+              liveStatusCacheRef.current[sessionIdStr] = { status: 'live', lastChecked: Date.now() };
+            } else {
+              liveStatusCacheRef.current[sessionIdStr] = { status: 'not_live', lastChecked: Date.now() };
+            }
+          } catch (statusError) {
+            const responseStatus = (statusError as any)?.response?.status ?? (statusError as any)?.status;
+            if (responseStatus === 404 || responseStatus === 400 || responseStatus === 410) {
+              liveStatusCacheRef.current[sessionIdStr] = { status: 'not_live', lastChecked: Date.now() };
+            }
+          }
         }
+
+        const updatedClasses = mapped.map((session) =>
+          liveIds.has(String(session.id))
+            ? { ...session, status: 'live' as UpcomingClass['status'] }
+            : session
+        );
+
+        setAllClasses(updatedClasses);
       } catch (error: any) {
-        if (mounted) {
-          setClassesError(error?.message || 'Failed to load class schedule');
-        }
+        setClassesError(error?.message || 'Failed to load class schedule');
       } finally {
-        if (mounted) {
+        if (!silent) {
           setLoadingClasses(false);
         }
+        setRefreshingSchedule(false);
       }
-    };
+    },
+    [api.lms.students]
+  );
 
-    fetchClassSchedule();
-    return () => { mounted = false; };
-  }, [api.lms.students]);
+  useEffect(() => {
+    fetchClassSchedule(false);
+    const interval = setInterval(() => {
+      fetchClassSchedule(true);
+    }, 30000);
+
+    return () => {
+      clearInterval(interval);
+    };
+  }, [fetchClassSchedule]);
+
+  const handleRefreshSchedule = () => fetchClassSchedule(false);
 
   // Filter and paginate upcoming classes (session_datetime >= today)
   const todayStart = new Date();
   todayStart.setHours(0, 0, 0, 0);
   const todayTimestamp = todayStart.getTime();
-  
+
   const upcomingOnly = allClasses
     .filter(c => c.epoch && c.epoch >= todayTimestamp)
-    .sort((a, b) => (a.epoch || 0) - (b.epoch || 0));
-  
+    .sort((a, b) => {
+      const aIsLive = a.status === 'live';
+      const bIsLive = b.status === 'live';
+      if (aIsLive !== bIsLive) {
+        return aIsLive ? -1 : 1;
+      }
+      return (a.epoch || 0) - (b.epoch || 0);
+    });
+
   const upcomingTotalPages = Math.max(1, Math.ceil(upcomingOnly.length / upcomingPageSize));
   const upcomingSlice = upcomingOnly.slice(
     (upcomingPage - 1) * upcomingPageSize,
     upcomingPage * upcomingPageSize
   );
 
-  // Paginate all classes for schedule tab
-  const allClassesSorted = [...allClasses].sort((a, b) => (a.epoch || 0) - (b.epoch || 0));
+  // Paginate all classes for schedule tab (live first, then latest)
+  const allClassesSorted = [...allClasses].sort((a, b) => {
+    // Sort by status first: live sessions appear first
+    const aIsLive = a.status === 'live' ? 0 : 1;
+    const bIsLive = b.status === 'live' ? 0 : 1;
+    if (aIsLive !== bIsLive) {
+      return aIsLive - bIsLive;
+    }
+    // Then sort by date descending (latest first)
+    return (b.epoch || 0) - (a.epoch || 0);
+  });
   const scheduleTotalPages = Math.max(1, Math.ceil(allClassesSorted.length / schedulePageSize));
   const scheduleSlice = allClassesSorted.slice(
     (schedulePage - 1) * schedulePageSize,
@@ -248,6 +383,142 @@ const StudentProfile = () => {
   const goNextUpcoming = () => setUpcomingPage(p => Math.min(upcomingTotalPages, p + 1));
   const goPrevSchedule = () => setSchedulePage(p => Math.max(1, p - 1));
   const goNextSchedule = () => setSchedulePage(p => Math.min(scheduleTotalPages, p + 1));
+
+  const handleJoinLiveClass = async (classItem: UpcomingClass, e?: React.MouseEvent<HTMLButtonElement>) => {
+    // Prevent default behavior and stop propagation to avoid page refresh
+    if (e) {
+      e.preventDefault();
+      e.stopPropagation();
+    }
+
+    // Prevent multiple clicks
+    if (classItem.status !== 'live') {
+      if (e) {
+        e.preventDefault();
+        e.stopPropagation();
+      }
+      return;
+    }
+
+    setJoinError(null);
+    setShowErrorModal(false);
+    setIsJoiningSession(true);
+
+    try {
+      const sessionId = parseInt(classItem.id);
+      if (isNaN(sessionId)) {
+        throw new Error('Invalid session ID');
+      }
+
+      // Check if we have a valid token before attempting to join
+      const token = localStorage.getItem('accessToken') || localStorage.getItem('auth_token');
+      if (!token) {
+        // Use modal instead of alert
+        setJoinError('Your session has expired. Please login again.');
+        setShowErrorModal(true);
+        setIsJoiningSession(false);
+        // Redirect after a short delay - use replace to avoid adding to history
+        setTimeout(() => {
+          if (!window.location.pathname.includes('/student/login')) {
+            window.location.replace('/student/login');
+          }
+        }, 2000);
+        return;
+      }
+
+      // Call the join API to get session data
+      try {
+        const response = await api.multimedia.sessions.joinSession(
+          sessionId,
+          classItem.program, // entityName (course name)
+          {
+            deviceType: 'web',
+            deviceName: navigator.userAgent,
+            deviceVersion: navigator.appVersion,
+          },
+          token, // explicitly pass current token
+          user // pass user object for studentId and studentName
+        );
+
+        // The API returns session data with HMS information
+        const sessionData = response?.data || response;
+
+        if (!sessionData) {
+          throw new Error('No session data received');
+        }
+
+        // Extract and save the live_class_token from HMS/Agora/AMS data
+        let liveClassToken = null;
+
+        // For HMS sessions
+        if (sessionData.hms?.token) {
+          liveClassToken = sessionData.hms.token;
+        }
+        // For Agora sessions
+        else if (sessionData.agora?.agoraToken) {
+          liveClassToken = sessionData.agora.agoraToken;
+        }
+        // For AMS sessions
+        else if (sessionData.ams?.token) {
+          liveClassToken = sessionData.ams.token;
+        }
+        // Fallback to top-level token if available
+        else if (sessionData.token) {
+          liveClassToken = sessionData.token;
+        }
+
+        if (liveClassToken) {
+          localStorage.setItem('live_class_token', liveClassToken);
+        }
+
+        // Store session data for the live class page
+        localStorage.setItem('liveSessionData', JSON.stringify({
+          sessionId,
+          ...sessionData,
+        }));
+
+        // Navigate to live class page
+        window.location.href = `/student/live/${sessionId}`;
+      } catch (apiError: any) {
+        throw apiError;
+      }
+
+    } catch (error: any) {
+      setIsJoiningSession(false);
+
+      console.error('Failed to join live session:', error);
+
+      const errorMessage = error?.message || error?.response?.data?.message || 'Failed to join session. Please try again.';
+      // Check both error.status and error.response.status
+      const statusCode = error?.status ?? error?.response?.status;
+
+      // ONLY treat as auth error if we have a CONFIRMED 401 status code
+      // If statusCode is undefined/null, it's NOT an auth error
+      const isAuthError = statusCode === 401;
+
+      if (isAuthError) {
+        // Auth error - redirect to login
+        setIsJoiningSession(false);
+        // Use replace to avoid adding to browser history
+        // Use a small delay to ensure React state updates complete
+        setTimeout(() => {
+          // Double check we're not already on login page
+          if (!window.location.pathname.includes('/student/login') &&
+              !window.location.pathname.includes('/login')) {
+            window.location.replace('/student/login');
+          }
+        }, 100);
+      } else {
+        // Non-auth error OR error without status code
+        // Show error modal - DO NOT redirect or refresh
+        setJoinError(errorMessage);
+        setShowErrorModal(true);
+        setIsJoiningSession(false);
+        // Explicitly DO NOT redirect or refresh
+        // The modal will handle closing, and the page will remain on the dashboard
+      }
+    }
+  };
 
   const mentorInfo: MentorInfo = {
     name: 'Sarah Mitchell',
@@ -418,13 +689,13 @@ const StudentProfile = () => {
                     className="fixed inset-0 z-10"
                     onClick={() => setShowUserDropdown(false)}
                   />
-                  
+
                   <div className="absolute right-0 mt-2 w-64 bg-[#1a2332] border border-gray-700 rounded-lg shadow-lg z-20">
                     <div className="px-4 py-3 border-b border-gray-700">
                       <p className="text-sm font-semibold text-white">{user?.name || 'Student'}</p>
                       <p className="text-xs text-gray-400">{user?.email || ''}</p>
                     </div>
-                    
+
                     <div className="py-2">
                       <button
                         className="w-full flex items-center space-x-3 px-4 py-2 text-left text-gray-300 hover:bg-gray-700 hover:text-white transition-colors duration-200"
@@ -575,6 +846,17 @@ const StudentProfile = () => {
                       <Calendar className="w-5 h-5" />
                       Upcoming Classes
                     </h2>
+                    <div className="flex items-center gap-3">
+                      {refreshingSchedule && (
+                        <span className="text-xs text-gray-400">Refreshing…</span>
+                      )}
+                      <button
+                        onClick={handleRefreshSchedule}
+                        className="px-3 py-1 text-xs font-semibold rounded-lg border border-gray-700 text-gray-300 hover:text-white hover:border-gray-500 transition"
+                      >
+                        Refresh
+                      </button>
+                    </div>
                   </div>
                   <div className="space-y-4">
                     {loadingClasses && (
@@ -635,7 +917,24 @@ const StudentProfile = () => {
                               </span>
                             </div>
                           </div>
-                          <button className="ml-4 px-4 py-2 bg-[#FFC540] text-black rounded-lg font-semibold hover:bg-[#FFC540] transition-all flex items-center gap-2 text-sm">
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.preventDefault();
+                              e.stopPropagation();
+                              e.nativeEvent.stopImmediatePropagation();
+                            handleJoinLiveClass(classItem, e);
+                            }}
+                            onMouseDown={(e) => {
+                              // Prevent any default behavior on mousedown
+                              if (e.button === 0) {
+                                e.preventDefault();
+                              }
+                            }}
+                            className="ml-4 px-4 py-2 bg-[#FFC540] text-black rounded-lg font-semibold hover:bg-[#FFC540] transition-all flex items-center gap-2 text-sm disabled:opacity-40 disabled:cursor-not-allowed"
+                            disabled={classItem.status !== 'live' || isJoiningSession}
+                            aria-disabled={classItem.status !== 'live' || isJoiningSession}
+                          >
                             {classItem.status === 'live' ? (
                               <>
                                 <Video className="w-4 h-4" />
@@ -876,7 +1175,26 @@ const StudentProfile = () => {
                         </div>
                       </div>
                     </div>
-                    <button className="ml-6 px-6 py-3 bg-[#FFC540] text-black rounded-lg font-bold hover:bg-[#FFC540] transition-all flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        e.nativeEvent.stopImmediatePropagation();
+                        if (classItem.status === 'live' && !isJoiningSession) {
+                          handleJoinLiveClass(classItem, e);
+                        }
+                      }}
+                      onMouseDown={(e) => {
+                        // Prevent any default behavior on mousedown
+                        if (e.button === 0) {
+                          e.preventDefault();
+                        }
+                      }}
+                      className="ml-6 px-6 py-3 bg-[#FFC540] text-black rounded-lg font-bold hover:bg-[#FFC540] transition-all flex items-center gap-2 disabled:opacity-40 disabled:cursor-not-allowed"
+                      disabled={classItem.status !== 'live' || isJoiningSession}
+                      aria-disabled={classItem.status !== 'live' || isJoiningSession}
+                    >
                       {classItem.status === 'live' ? (
                         <>
                           <Video className="w-4 h-4" />
@@ -1244,6 +1562,55 @@ const StudentProfile = () => {
                   Upload
                 </button>
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Error Modal for Join Session Errors */}
+      {showErrorModal && joinError && (
+        <div
+          className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4"
+          onClick={(e) => {
+            // Close modal when clicking backdrop
+            if (e.target === e.currentTarget) {
+              setShowErrorModal(false);
+              setJoinError(null);
+            }
+          }}
+        >
+          <div className="bg-[#1a2332] rounded-xl p-8 border border-gray-800 max-w-md w-full">
+            <div className="flex items-center justify-between mb-6">
+              <h3 className="text-2xl font-bold text-white">Error Joining Session</h3>
+              <button
+                onClick={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  setShowErrorModal(false);
+                  setJoinError(null);
+                }}
+                className="text-gray-400 hover:text-white transition-all"
+                type="button"
+              >
+                <X className="w-6 h-6" />
+              </button>
+            </div>
+            <div className="mb-6">
+              <p className="text-gray-300">{joinError}</p>
+            </div>
+            <div className="flex justify-end">
+              <button
+                onClick={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  setShowErrorModal(false);
+                  setJoinError(null);
+                }}
+                className="px-6 py-3 bg-[#FFC540] text-black rounded-lg font-bold hover:bg-[#FFC540] transition-all"
+                type="button"
+              >
+                OK
+              </button>
             </div>
           </div>
         </div>

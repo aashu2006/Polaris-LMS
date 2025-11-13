@@ -143,6 +143,12 @@
   transition: all 0.3s ease;
 }
 
+.video-tile.pinned {
+  border-color: rgba(102, 126, 234, 0.8);
+  box-shadow: 0 25px 50px -12px rgba(59, 130, 246, 0.6);
+  transform: scale(1.03);
+}
+
 .video-tile:hover {
   transform: scale(1.02);
   box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.4);
@@ -153,6 +159,18 @@
   width: 100%;
   height: 100%;
   object-fit: cover;
+}
+
+.no-video-fallback {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 48px;
+  font-weight: 700;
+  color: rgba(255, 255, 255, 0.5);
+  background: rgba(31, 41, 55, 0.9);
 }
 
 .peer-info {
@@ -179,6 +197,8 @@
 
 .muted-indicator {
   font-size: 18px;
+  display: inline-flex;
+  align-items: center;
   animation: pulse 2s infinite;
 }
 
@@ -282,6 +302,39 @@
 .leave-btn:hover {
   background: linear-gradient(135deg, #b91c1c 0%, #991b1b 100%);
   box-shadow: 0 6px 24px rgba(220, 38, 38, 0.5);
+}
+
+.control-btn.participants-btn {
+  width: auto;
+  padding: 0 20px;
+  border-radius: 32px;
+  font-size: 20px;
+}
+
+.icon-text {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.icon-inline {
+  margin-left: 6px;
+  vertical-align: middle;
+}
+
+.icon-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.track-debug {
+  display: flex;
+  gap: 16px;
+  align-items: center;
+  color: #d1d5db;
+  font-size: 12px;
+  margin-top: 6px;
 }
 
 .room-footer {
@@ -403,5 +456,90 @@
 
 .btn-primary:hover {
   background: #e6b139;
+}
+
+.participants-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.35);
+  backdrop-filter: blur(2px);
+  z-index: 30;
+}
+
+.participants-sidebar {
+  position: fixed;
+  top: 0;
+  right: 0;
+  width: 320px;
+  height: 100vh;
+  background: rgba(17, 24, 39, 0.95);
+  color: white;
+  z-index: 40;
+  box-shadow: -8px 0 24px rgba(0, 0, 0, 0.5);
+  display: flex;
+  flex-direction: column;
+  animation: slideIn 0.3s ease-out;
+}
+
+.participants-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 24px;
+  font-weight: 700;
+  font-size: 18px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.participants-header .close-btn {
+  background: none;
+  border: none;
+  color: #9ca3af;
+  font-size: 20px;
+  cursor: pointer;
+  transition: color 0.2s ease;
+}
+
+.participants-header .close-btn:hover {
+  color: white;
+}
+
+.participants-list {
+  list-style: none;
+  padding: 16px 0;
+  margin: 0;
+  overflow-y: auto;
+  flex: 1;
+}
+
+.participants-list li {
+  display: flex;
+  justify-content: space-between;
+  padding: 12px 24px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+  font-size: 15px;
+}
+
+.participant-name {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.participant-status {
+  color: #9ca3af;
+  font-size: 14px;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+@keyframes slideIn {
+  from {
+    transform: translateX(100%);
+  }
+  to {
+    transform: translateX(0);
+  }
 }
 

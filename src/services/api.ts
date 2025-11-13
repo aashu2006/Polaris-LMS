@@ -4,38 +4,69 @@ import { useAuth } from '../contexts/AuthContext';
 
 // Base URLs for different services
 const UMS_BASE_URL = import.meta.env.VITE_UMS_BASE_URL || 'https://ums-672553132888.asia-south1.run.app'; // User Management System
-const LMS_BASE_URL = import.meta.env.VITE_LMS_BASE_URL || 'https://live-class-lms1-672553132888.asia-south1.run.app'; // Live Class LMS Backend  
+const LMS_BASE_URL = import.meta.env.VITE_LMS_BASE_URL || 'https://live-class-lms1-672553132888.asia-south1.run.app'; // Live Class LMS Backend
 
 // Token storage and refresh functionality
 let refreshTokenPromise: Promise<string> | null = null;
 
 // Helper function to redirect to appropriate login page based on user type
 // Only call this for actual 401 authentication errors
+function decodeUserTypeFromToken(token: string | null): string | null {
+  if (!token) return null;
+  try {
+    const parts = token.split('.');
+    if (parts.length < 2) return null;
+    const base64 = parts[1].replace(/-/g, '+').replace(/_/g, '/');
+    const payload = JSON.parse(atob(base64));
+    const userType =
+      payload?.userType ||
+      payload?.user_type ||
+      payload?.role ||
+      payload?.type ||
+      payload?.userRole;
+    if (typeof userType === 'string') {
+      return userType.toLowerCase();
+    }
+    return null;
+  } catch {
+    return null;
+  }
+}
+
 function redirectToLogin() {
   // Use a flag to prevent multiple redirects
   if ((window as any).__redirectingToLogin) {
     return;
   }
   (window as any).__redirectingToLogin = true;
-  
+
+  let redirectPath = '/student/login';
+
   try {
-    const storedUser = localStorage.getItem('auth_user');
-    if (storedUser) {
-      const user = JSON.parse(storedUser);
-      if (user.userType === 'student') {
-        window.location.replace('/student/login');
-        return;
-      } else if (user.userType === 'faculty') {
-        window.location.replace('/faculty/login');
-        return;
+    const storedToken = localStorage.getItem('accessToken') || localStorage.getItem('auth_token');
+    const userType = decodeUserTypeFromToken(storedToken);
+
+    if (userType === 'student') {
+      redirectPath = '/student/login';
+    } else if (userType === 'faculty' || userType === 'mentor') {
+      redirectPath = '/faculty/login';
+    } else if (userType === 'admin') {
+      redirectPath = '/admin/login';
+    } else {
+      // Fallback based on current path
+      const currentPath = window.location.pathname;
+      if (currentPath.includes('/student')) {
+        redirectPath = '/student/login';
+      } else if (currentPath.includes('/faculty') || currentPath.includes('/mentor')) {
+        redirectPath = '/faculty/login';
       }
     }
-  } catch (error) {
-    // If we can't parse user, fall back to admin login
+  } catch {
+    // Ignore errors and fallback to default path
   }
-  // Default to admin login or landing page
+
   // Use replace instead of href to prevent back button issues
-  window.location.replace('/admin/login');
+  window.location.replace(redirectPath);
 }
 
 async function refreshAccessToken(refreshToken: string): Promise<string> {
@@ -151,7 +182,7 @@ async function lmsApiRequest(url: string, options: RequestInit = {}, token?: str
     if (error instanceof TypeError && error.message.includes('fetch')) {
       throw new Error(`Network error: Unable to reach ${url}. This might be a CORS issue or the server is unreachable.`);
     }
-    
+
     // If it's already an Error with a message, re-throw it
     if (error instanceof Error) {
       throw error;
@@ -191,14 +222,14 @@ async function apiRequest(url: string, options: RequestInit = {}, token?: string
           ...options,
           headers,
         });
-        
+
         // Check if retry was successful
         if (!retryResponse.ok) {
           // Create error with status code preserved
           const error: any = new Error(`HTTP error! status: ${retryResponse.status}`);
           error.status = retryResponse.status;
           error.response = { status: retryResponse.status };
-          
+
           if (retryResponse.status === 401) {
             // Still unauthorized after refresh - mark as 401 but don't redirect automatically
             // Let the component handle the redirect
@@ -214,7 +245,7 @@ async function apiRequest(url: string, options: RequestInit = {}, token?: string
             throw error;
           }
         }
-        
+
         // Parse successful response
         try {
           return await retryResponse.json();
@@ -250,7 +281,7 @@ async function apiRequest(url: string, options: RequestInit = {}, token?: string
     const error: any = new Error(`HTTP error! status: ${response.status}`);
     error.status = response.status;
     error.response = { status: response.status, statusText: response.statusText };
-    
+
     // Try to get error message from response
     try {
       const errorData = await response.json();
@@ -345,13 +376,13 @@ const umsApi = {
         body: JSON.stringify(programData),
       }, token);
     },
-    
+
     getProgramDetails: async (courseId: number, token: string) => {
       return apiRequest(`${LMS_BASE_URL}/api/v1/admin/programs/getCourseById/${courseId}`, {
         method: 'GET',
       }, token);
     },
-    
+
     getProgramMentors: async (courseId: number, token: string) => {
       return apiRequest(`${LMS_BASE_URL}/api/v1/admin/ProgramMentors/courses/${courseId}/sessions`, {
         method: 'GET',
@@ -389,7 +420,7 @@ const umsApi = {
       const formData = new FormData();
       formData.append('file', file);
       formData.append('batchId', batchId.toString());
-      
+
       return lmsApiRequest(`${LMS_BASE_URL}/api/v1/admin/students/bulk-enroll`, {
         method: 'POST',
         body: formData,
@@ -493,17 +524,17 @@ const umsApi = {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(credentials),
       });
-      
+
       if (!response.ok) {
         const error = await response.json();
         throw new Error(error.message || 'Login failed');
       }
-      
+
       const data = await response.json();
       const token = response.headers.get('x-access-token');
       // Extract refreshToken from response body or headers
       const refreshToken = data.refreshToken || response.headers.get('x-refresh-token') || response.headers.get('refresh-token');
-      
+
       return { user: data.user, token, refreshToken };
     },
 
@@ -514,17 +545,17 @@ const umsApi = {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ token }),
       });
-      
+
       if (!response.ok) {
         const error = await response.json();
         throw new Error(error.message || 'Google login failed');
       }
-      
+
       const data = await response.json();
       const accessToken = response.headers.get('x-access-token');
       // Extract refreshToken from response body or headers
       const refreshToken = data.refreshToken || response.headers.get('x-refresh-token') || response.headers.get('refresh-token');
-      
+
       return { user: data.user, token: accessToken, refreshToken };
     },
 
@@ -535,17 +566,17 @@ const umsApi = {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ token }),
       });
-      
+
       if (!response.ok) {
         const error = await response.json();
         throw new Error(error.message || 'Google login failed');
       }
-      
+
       const data = await response.json();
       const accessToken = response.headers.get('x-access-token');
       // Extract refreshToken from response body or headers
       const refreshToken = data.refreshToken || response.headers.get('x-refresh-token') || response.headers.get('refresh-token');
-      
+
       return { user: data.user, token: accessToken, refreshToken };
     },
 
@@ -556,17 +587,17 @@ const umsApi = {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ token }),
       });
-      
+
       if (!response.ok) {
         const error = await response.json();
         throw new Error(error.message || 'Google login failed');
       }
-      
+
       const data = await response.json();
       const accessToken = response.headers.get('x-access-token');
       // Extract refreshToken from response body or headers
       const refreshToken = data.refreshToken || response.headers.get('x-refresh-token') || response.headers.get('refresh-token');
-      
+
       return { user: data.user, token: accessToken, refreshToken };
     },
 
@@ -577,17 +608,17 @@ const umsApi = {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(credentials),
       });
-      
+
       if (!response.ok) {
         const error = await response.json();
         throw new Error(error.message || 'Login failed');
       }
-      
+
       const data = await response.json();
       const token = response.headers.get('x-access-token');
       // Extract refreshToken from response body or headers
       const refreshToken = data.refreshToken || response.headers.get('x-refresh-token') || response.headers.get('refresh-token');
-      
+
       return { user: data.user, token, refreshToken };
     },
 
@@ -747,6 +778,18 @@ const lmsApi = {
         method: 'POST',
         body: JSON.stringify(sessionData),
         headers: { 'Content-Type': 'application/json' },
+      }, token);
+    },
+  },
+
+  sessions: {
+    markComplete: async (sessionId: number, token: string) => {
+      return lmsApiRequest(`${LMS_BASE_URL}/api/v1/live/complete`, {
+        method: 'POST',
+        body: JSON.stringify({ sessionId }),
+        headers: {
+          'Content-Type': 'application/json',
+        },
       }, token);
     },
   },
@@ -963,13 +1006,13 @@ const lmsApi = {
         method: 'GET',
       }, token);
     },
-    
+
     getDashboardStats: async (token: string) => {
       return lmsApiRequest(`${LMS_BASE_URL}/api/v1/admin/mentorStats/dashboard/all`, {
         method: 'GET',
       }, token);
     },
-    
+
     getPerformanceMetrics: async (token: string) => {
       return lmsApiRequest(`${LMS_BASE_URL}/api/v1/admin/mentorStats/performance-metrics`, {
         method: 'GET',
@@ -1022,10 +1065,11 @@ const lmsApi = {
 
 // Multimedia API functions
 const getMMBaseURL = () => {
-  if (import.meta.env.VITE_MULTIMEDIA_BASE_URL) {
-    return import.meta.env.VITE_MULTIMEDIA_BASE_URL;
+  const multimediaBaseUrl = import.meta.env.VITE_MULTIMEDIA_BASE_URL;
+  if (!multimediaBaseUrl) {
+    throw new Error('VITE_MULTIMEDIA_BASE_URL is not configured');
   }
-  return 'http://localhost:5000/mm/v3';
+  return multimediaBaseUrl;
 };
 
 const MM_BASE_URL = getMMBaseURL();
@@ -1055,7 +1099,7 @@ const multimediaApi = {
       try {
         const response = await lmsApiRequest(url, {
           method: 'POST',
-          body: JSON.stringify({ sessionId, facultyId, batchId, facultyName }),
+          body: JSON.stringify({ sessionId, facultyId, batchId, facultyName, platform: 'external_lms' }),
           headers: {
             'Content-Type': 'application/json',
           },
@@ -1072,21 +1116,33 @@ const multimediaApi = {
       }, token);
     },
 
-    joinSession: async (sessionId: number, entityName: string | undefined, deviceDetails: any, token: string) => {
-      const url = `${MM_BASE_URL}/session/join`;
+    joinSession: async (sessionId: number, _entityName: string | undefined, deviceDetails: any, token: string, user?: any) => {
+      const url = `${MM_BASE_URL}/liveclass/session/student/interactive-join-token`;
       try {
+        // Parse user info from token or use provided user object
+        let studentId = '';
+        let studentName = '';
+
+        if (user) {
+          studentId = user.id || '';
+          studentName = user.name || '';
+        } else if (token) {
+          try {
+            const decoded = JSON.parse(atob(token.split('.')[1]));
+            studentId = decoded.id || '';
+            studentName = decoded.name || '';
+          } catch {
+            // Ignore decoding errors; payload may not be a JWT
+          }
+        }
+
         const payload: any = {
           sessionId,
-          deviceDetails: deviceDetails || {
-            deviceType: 'web',
-            deviceName: navigator.userAgent || 'Web Browser',
-            deviceVersion: navigator.appVersion || '1.0',
-          },
+          studentId,
+          studentName,
+          deviceType: deviceDetails?.deviceType || 'web',
         };
-        if (entityName) {
-          payload.entityName = entityName;
-        }
-        
+
         // Check if token exists before making request
         if (!token) {
           const error: any = new Error('No authentication token available. Please login again.');
@@ -1095,9 +1151,8 @@ const multimediaApi = {
           redirectToLogin();
           throw error;
         }
-        
-        // Use lmsApiRequest for multimedia service (simpler, no auto-refresh)
-        // Multimedia service requires both Authorization and x-access-token headers
+
+        // Use lmsApiRequest for multimedia service
         const response = await lmsApiRequest(url, {
           method: 'POST',
           body: JSON.stringify(payload),
@@ -1105,7 +1160,7 @@ const multimediaApi = {
             'Content-Type': 'application/json',
           },
         }, token);
-        
+
         return response;
       } catch (error: any) {
         // Log the actual error for debugging
@@ -1115,12 +1170,12 @@ const multimediaApi = {
           statusText: error?.response?.statusText,
           error: error
         });
-        
+
         // ONLY treat as auth error if we have a confirmed 401 status code
         // Don't check error messages as they can be misleading
         const statusCode = error?.status || error?.response?.status;
         const isAuthError = statusCode === 401;
-        
+
         // Don't modify non-auth errors - let them pass through with their original message
         if (isAuthError) {
           // Only for actual 401 errors
@@ -1131,7 +1186,7 @@ const multimediaApi = {
           authError.response = { status: 401 };
           throw authError;
         }
-        
+
         // For all other errors (400, 404, 500, network errors, etc.), pass through the original error
         // This way users see the actual error message from the server
         // Make sure status code is preserved
@@ -1305,6 +1360,9 @@ export const useApi = () => {
         getSections: (batchId: string) => lmsApi.mentors.getSections(batchId, token),
         addSession: (sessionData: any) => lmsApi.mentors.addSession(sessionData, token),
       },
+      sessions: {
+        markComplete: (sessionId: number) => lmsApi.sessions.markComplete(sessionId, token),
+      },
       assignments: {
         getAll: () => lmsApi.assignments.getAll(token),
       },
@@ -1341,7 +1399,7 @@ export const useApi = () => {
         getGroupStats: () => lmsApi.adminGroups.getGroupStats(token),
         createGroup: (groupData: any) => lmsApi.adminGroups.createGroup(groupData, token),
         editGroup: (groupId: string, groupData: any) => lmsApi.adminGroups.editGroup(groupId, groupData, token),
-      },   
+      },
       adminStudents: {
         bulkUploadStudents: (formData: FormData) => lmsApi.adminStudents.bulkUploadStudents(formData, token),
         getWeeklyAttendanceStats: () => lmsApi.adminStudents.getWeeklyAttendanceStats(token),
@@ -1371,8 +1429,8 @@ export const useApi = () => {
         startSession: (sessionId: number, facultyId: string, batchId: number, facultyName: string) =>
           multimediaApi.sessions.startSession(sessionId, facultyId, batchId, facultyName, token),
         getSessionStatus: (sessionId: string) => multimediaApi.sessions.getSessionStatus(sessionId, token),
-        joinSession: (sessionId: number, entityName?: string, deviceDetails?: any) => 
-          multimediaApi.sessions.joinSession(sessionId, entityName, deviceDetails, token),
+        joinSession: (sessionId: number, entityName?: string, deviceDetails?: any, providedToken?: string, user?: any) =>
+          multimediaApi.sessions.joinSession(sessionId, entityName, deviceDetails, providedToken || token, user),
         endSession: (sessionId: number, facultyId: string) => multimediaApi.sessions.endSession(sessionId, facultyId, token),
       },
       reports: {

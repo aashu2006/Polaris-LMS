@@ -4,6 +4,8 @@ import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { StudentPage, FacultyPage, AdminPage, Dashboard, Landing } from './pages';
 import MentorDashboard from './components/mentorComponents/MentorDashboard';
 import StudentProfile from './components/studentComponents/StudentProfile';
+import StudentLiveRoom from './components/studentComponents/StudentLiveRoom';
+import { HMSRoomProvider } from '@100mslive/react-sdk';
 
 const ProtectedRoute: React.FC<{ children: React.ReactNode; redirectTo: string }> = ({ children, redirectTo }) => {
   const { isAuthenticated, loading } = useAuth();
@@ -28,7 +30,14 @@ const RoleProtectedRoute: React.FC<{ children: React.ReactNode; allowedRoles: Ar
   const normalizedRole = user?.userType === 'faculty' ? 'mentor' : (user?.userType as 'admin' | 'mentor' | 'student' | undefined);
 
   if (!normalizedRole) {
-    return <Navigate to="/admin/login" replace />;
+    const currentPath = window.location.pathname;
+    if (currentPath.includes('/faculty') || currentPath.includes('/mentor')) {
+      return <Navigate to="/faculty/login" replace />;
+    }
+    if (currentPath.includes('/admin')) {
+      return <Navigate to="/admin/login" replace />;
+    }
+    return <Navigate to="/student/login" replace />;
   }
 
   if (!allowedRoles.includes(normalizedRole)) {
@@ -157,14 +166,26 @@ const AppRoutes: React.FC = () => {
           </ProtectedRoute>
         }
       />
+      <Route
+        path="/student/live/:sessionId"
+        element={
+          <ProtectedRoute redirectTo="/student/login">
+            <RoleProtectedRoute allowedRoles={['student']}>
+              <HMSRoomProvider>
+                <StudentLiveRoom />
+              </HMSRoomProvider>
+            </RoleProtectedRoute>
+          </ProtectedRoute>
+        }
+      />
 
       {/* Redirect authenticated users to appropriate dashboard */}
       {isAuthenticated && (
         <Route path="*" element={<Navigate to="/admin/dashboard" replace />} />
       )}
       
-      {/* Redirect unauthenticated users to admin login */}
-      <Route path="*" element={<Navigate to="/admin/login" replace />} />
+      {/* Redirect unauthenticated users to student login */}
+      <Route path="*" element={<Navigate to="/student/login" replace />} />
     </Routes>
   );
 };
