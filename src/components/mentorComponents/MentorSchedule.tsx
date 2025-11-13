@@ -604,8 +604,6 @@ const MentorSchedule: React.FC = () => {
                 >
                   <option value="theory">Theory</option>
                   <option value="practical">Practical</option>
-                  <option value="lab">Lab</option>
-                  <option value="workshop">Workshop</option>
                 </select>
               </div>
 
