@@ -1107,9 +1107,9 @@ const lmsApi = {
 const getMMBaseURL = () => {
   const multimediaBaseUrl = import.meta.env.VITE_MULTIMEDIA_BASE_URL;
   if (!multimediaBaseUrl) {
-    throw new Error('VITE_MULTIMEDIA_BASE_URL is not configured');
+    console.warn('VITE_MULTIMEDIA_BASE_URL is not configured; defaulting to https://prod-multimedia.polariscampus.com/mm/v3');
   }
-  return multimediaBaseUrl;
+  return multimediaBaseUrl || 'https://prod-multimedia.polariscampus.com/mm/v3';
 };
 
 const MM_BASE_URL = getMMBaseURL();
