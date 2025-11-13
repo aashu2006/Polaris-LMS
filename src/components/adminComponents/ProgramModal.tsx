@@ -293,62 +293,31 @@ const transformedReschedules = reschedules.map((reschedule: any) => {
     });
 
   // --- Actions ---
-  const handleSave = async () => {
+  const handleSave = async (e?: React.FormEvent) => {
+    if (e) {
+      e.preventDefault();
+    }
+    
     if (mode === 'edit' && !program) {
       try {
         setLoading(true);
 
-        if (faculties.length === 0) {
-          alert('No faculties available. Please add a faculty first.');
-          return;
-        }
-
-        if (batches.length === 0) {
-          alert('No batches available. Please add a batch first.');
-          return;
-        }
-
-        if (!selectedBatchId) {
-          alert('Please select a batch.');
-          return;
-        }
-
-        if (!selectedFacultyId) {
-          alert('Please select a faculty member.');
-          return;
-        }
-
         const courseName = (editData.name ?? '').trim();
         const startDate = editData.startDate ?? '';
         const endDate = editData.endDate ?? '';
-        const statusValue = normalizeStatus(editData.status);
+        const active = editData.status === 'active' ? 'active' : 'inactive';
 
         if (!courseName || !startDate || !endDate) {
-          alert('Please fill out program name, start date, and end date.');
+          alert('Please fill out all required fields: Program Name, Start Date, and End Date.');
           return;
         }
 
         const programData = {
           courseName,
-          batchId: selectedBatchId,
           startDate,
           endDate,
-          facultyId: selectedFacultyId,
-          status: statusValue,
-          active: statusValue,
-          activeStatus: statusValue,
-          active_status: statusValue,
-          sessions: editData.sessions ?? 0,
-          theory_hours: 30,
-          practical_hours: 30,
-          // legacy keys for backward compatibility
-          course_name: courseName,
-          batch_id: selectedBatchId,
-          start_date: startDate,
-          end_date: endDate,
-          faculty_id: selectedFacultyId,
-          status_text: statusValue
-        } as any;
+          active
+        };
 
         const result = await api.lms.adminPrograms.createProgram(programData);
 
@@ -356,7 +325,7 @@ const transformedReschedules = reschedules.map((reschedule: any) => {
           alert('Program created successfully!');
           onClose();
         } else {
-          alert('Failed to create program: ' + (result?.error || JSON.stringify(result) || 'Unknown error'));
+          alert('Failed to create program: ' + (result?.error || result?.message || JSON.stringify(result) || 'Unknown error'));
         }
       } catch (error: any) {
         alert('Error creating program: ' + (error?.message ?? String(error)));
@@ -430,246 +399,56 @@ const transformedReschedules = reschedules.map((reschedule: any) => {
 
           {/* Content */}
           <div className="px-8 py-8 overflow-y-auto max-h-[calc(95vh-120px)]">
-            <form onSubmit={(e) => { e.preventDefault(); handleSave(); }} className="space-y-6">
-              {/* Program Name and Cohort - Always 2 columns */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="bg-gray-800/50 rounded-xl p-6 border border-gray-700/50">
-                  <label className="block text-sm font-medium text-gray-300 mb-3">
-                    Program Name
-                  </label>
-                  {mode === 'view' ? (
-                    <div className="h-12 flex items-center px-4 bg-gray-800 rounded-lg text-white">
-                      {program?.name ?? (program as any)?.course_name ?? 'N/A'}
-                    </div>
-                  ) : (
-                    <input
-                      type="text"
-                      value={editData.name ?? ''}
-                      onChange={(e) => setEditData({ ...editData, name: e.target.value })}
-                      className="w-full h-12 px-4 bg-gray-800 border border-gray-700 text-white rounded-lg focus:border-yellow-500 focus:ring-2 focus:ring-yellow-500/20 focus:outline-none transition-all duration-200"
-                      placeholder="Enter program name"
-                      required
-                    />
-                  )}
-                </div>
-
-                <div className="bg-gray-800/50 rounded-xl p-6 border border-gray-700/50">
-                  <label className="block text-sm font-medium text-gray-300 mb-3">
-                    Cohort
-                  </label>
-                  {mode === 'view' ? (
-                    <div className="h-12 flex items-center px-4 bg-gray-800 rounded-lg text-white">
-                      {program?.cohort ?? (program as any)?.batch_name ?? 'N/A'}
-                    </div>
-                  ) : (
-                    <input
-                      type="text"
-                      value={editData.cohort ?? ''}
-                      onChange={(e) => setEditData({ ...editData, cohort: e.target.value })}
-                      className="w-full h-12 px-4 bg-gray-800 border border-gray-700 text-white rounded-lg focus:border-yellow-500 focus:ring-2 focus:ring-yellow-500/20 focus:outline-none transition-all duration-200"
-                      placeholder="Enter cohort name"
-                      required
-                    />
-                  )}
-                </div>
-              </div>
-
-              {/* Batch and Faculty Selection - Only show when creating new program */}
-              {mode === 'edit' && !program && (
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div className="bg-gray-800/50 rounded-xl p-6 border border-gray-700/50">
-                    <label className="block text-sm font-medium text-gray-300 mb-3">
-                      Batch
-                    </label>
-                    <select
-                      value={selectedBatchId}
-                      onChange={(e) => setSelectedBatchId(e.target.value ? parseInt(e.target.value, 10) : 0)}
-                      className="w-full h-12 px-4 bg-gray-800 border border-gray-700 text-white rounded-lg focus:border-yellow-500 focus:ring-2 focus:ring-yellow-500/20 focus:outline-none transition-all duration-200"
-                      disabled={loading}
-                    >
-                      <option value={0} disabled>{loading ? 'Loading batches...' : 'Select Batch'}</option>
-                      {batches.map((batch) => (
-                        <option key={batch.id} value={batch.id}>
-                          {batch.batch_name} ({batch.academic_year} - Semester {batch.semester})
-                        </option>
-                      ))}
-                    </select>
+            <form onSubmit={handleSave} className="space-y-6">
+              {/* Program Name */}
+              <div className="bg-gray-800/50 rounded-xl p-6 border border-gray-700/50">
+                <label className="block text-sm font-medium text-gray-300 mb-3">
+                  Program Name
+                </label>
+                {mode === 'view' ? (
+                  <div className="h-12 flex items-center px-4 bg-gray-800 rounded-lg text-white">
+                    {program?.name ?? (program as any)?.course_name ?? 'N/A'}
                   </div>
-
-                  <div className="bg-gray-800/50 rounded-xl p-6 border border-gray-700/50">
-                    <label className="block text-sm font-medium text-gray-300 mb-3">
-                      Faculty
-                    </label>
-                    <select
-                      value={selectedFacultyId}
-                      onChange={(e) => setSelectedFacultyId(e.target.value)}
-                      className="w-full h-12 px-4 bg-gray-800 border border-gray-700 text-white rounded-lg focus:border-yellow-500 focus:ring-2 focus:ring-yellow-500/20 focus:outline-none transition-all duration-200"
-                      disabled={loading}
-                    >
-                      <option value="">{loading ? 'Loading faculties...' : `Select Faculty (${faculties.length} available)`}</option>
-                      {faculties.map((faculty) => (
-                        <option key={faculty.user_id} value={faculty.user_id}>
-                          {faculty.profiles?.name ?? 'Unknown Faculty'}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                </div>
-              )}
-
-              {/* Form Fields Grid - Responsive 2/3 columns */}
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                {/* Assigned Mentor */}
-                <div className="bg-gray-800/50 rounded-xl p-6 border border-gray-700/50 relative">
-                  <label className="block text-sm font-medium text-gray-300 mb-3">
-                    <Users className="w-4 h-4 inline mr-2" />
-                    Assigned Mentor
-                  </label>
-
-                  {mode === 'view' ? (
-                    <div className="h-12 flex items-center px-4 bg-gray-800 rounded-lg text-white">
-                      {reschedules[0]?.faculty_name ?? (program as any)?.faculty_name ?? (
-                        <span className="text-gray-500 italic">No mentor assigned</span>
-                      )}
-                    </div>
-                  ) : (
-                    <div className="relative z-50">
-                      <button
-                        type="button"
-                        onClick={() => setShowMentorDropdown(!showMentorDropdown)}
-                        className="w-full h-12 px-4 bg-gray-800 border border-gray-700 text-white rounded-lg focus:border-yellow-500 focus:ring-2 focus:ring-yellow-500/20 focus:outline-none transition-all duration-200 flex items-center justify-between hover:bg-gray-700/50"
-                      >
-                        <span className={editData.assignedMentor ? 'text-white' : 'text-gray-400'}>
-                          {editData.assignedMentor ? (editData.assignedMentor as any).name : 'Select Mentor'}
-                        </span>
-                        <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                        </svg>
-                      </button>
-
-                      {showMentorDropdown && (
-                        <div className="absolute top-full left-0 right-0 mt-2 bg-gray-800 border border-gray-700 rounded-lg shadow-2xl z-50 max-h-56 overflow-y-auto">
-                          <div className="p-3 border-b border-gray-700">
-                            <input
-                              type="text"
-                              placeholder="Search mentors..."
-                              value={searchTerm}
-                              onChange={(e) => setSearchTerm(e.target.value)}
-                              className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white text-sm focus:border-yellow-500 focus:outline-none"
-                            />
-                          </div>
-                          {filteredMentors.map((mentor) => (
-                            <button
-                              key={mentor.user_id}
-                              type="button"
-                              onClick={() => handleMentorSelect(mentor)}
-                              className="w-full px-4 py-3 text-left hover:bg-gray-700/50 transition-colors flex items-center justify-between border-b border-gray-700/50 last:border-b-0"
-                            >
-                              <div className="flex items-center">
-                                <div className={`w-2.5 h-2.5 rounded-full mr-3 ${getStatusColor(mentor.profiles.name)}`}></div>
-                                <span className="text-white font-medium">{mentor.profiles.name}</span>
-                              </div>
-                              {(editData.assignedMentor as any)?.id === mentor.user_id && (
-                                <svg className="w-4 h-4 text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                                </svg>
-                              )}
-                            </button>
-                          ))}
-                        </div>
-                      )}
-                    </div>
-                  )}
-                </div>
-
-                {/* Sessions */}
-                <div className="bg-gray-800/50 rounded-xl p-6 border border-gray-700/50">
-                  <label className="block text-sm font-medium text-gray-300 mb-3">
-                    <BookOpen className="w-4 h-4 inline mr-2" />
-                    Sessions
-                  </label>
-                  {mode === 'view' ? (
-                    <div className="h-12 flex items-center px-4 bg-gray-800 rounded-lg">
-                      <span className="text-2xl font-bold text-white">{program?.sessions ?? (program as any)?.sessions ?? 0}</span>
-                    </div>
-                  ) : (
-                    <input
-                      type="number"
-                      value={typeof editData.sessions === 'number' ? editData.sessions : 0}
-                      onChange={(e) => setEditData({ ...editData, sessions: parseInt(e.target.value, 10) || 0 })}
-                      className="w-full h-12 px-4 bg-gray-800 border border-gray-700 text-white rounded-lg focus:border-yellow-500 focus:ring-2 focus:ring-yellow-500/20 focus:outline-none transition-all duration-200"
-                      placeholder="0"
-                      min="0"
-                    />
-                  )}
-                </div>
-
-                {/* Status */}
-                <div className="bg-gray-800/50 rounded-xl p-6 border border-gray-700/50">
-                  <label className="block text-sm font-medium text-gray-300 mb-3">
-                    <Calendar className="w-4 h-4 inline mr-2" />
-                    Status
-                  </label>
-                  {mode === 'view' ? (
-                    <div className="h-12 flex items-center px-4 bg-gray-800 rounded-lg">
-                      {(() => {
-                        const rawStatus = (program as any)?.status ?? (program as any)?.active;
-                        const normalized = normalizeStatus(rawStatus);
-                        const badgeClass = normalized === 'active'
-                          ? 'text-green-400 bg-green-400/10'
-                          : normalized === 'inactive'
-                            ? 'text-gray-300 bg-gray-400/10'
-                            : 'text-yellow-400 bg-yellow-400/10';
-                        const label = normalized.charAt(0).toUpperCase() + normalized.slice(1);
-                        return (
-                          <span className={`inline-flex px-3 py-1 text-xs font-medium rounded-full ${badgeClass}`}>
-                            {label}
-                          </span>
-                        );
-                      })()}
-                    </div>
-                  ) : (
-                    <select
-                      value={editData.status ?? 'active'}
-                      onChange={(e) => setEditData({ ...editData, status: e.target.value as Program['status'] })}
-                      className="w-full h-12 px-4 bg-gray-800 border border-gray-700 text-white rounded-lg focus:border-yellow-500 focus:ring-2 focus:ring-yellow-500/20 focus:outline-none transition-all duration-200"
-                    >
-                      <option value="active">Active</option>
-                      <option value="inactive">Inactive</option>
-                      <option value="archived">Archived</option>
-                    </select>
-                  )}
-                </div>
+                ) : (
+                  <input
+                    type="text"
+                    value={editData.name ?? ''}
+                    onChange={(e) => setEditData({ ...editData, name: e.target.value })}
+                    className="w-full h-12 px-4 bg-gray-800 border border-gray-700 text-white rounded-lg focus:border-yellow-500 focus:ring-2 focus:ring-yellow-500/20 focus:outline-none transition-all duration-200"
+                    placeholder="Enter program name"
+                    required
+                  />
+                )}
               </div>
 
               {/* Date Fields - Always 2 columns */}
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div className="bg-gray-800/50 rounded-xl p-6 border border-gray-700/50">
-                    <label className="block text-sm font-medium text-gray-300 mb-3">
-                      Start Date
-                    </label>
-                    {mode === 'view' ? (
-                      <div className="h-12 flex items-center px-4 bg-gray-800 rounded-lg text-white">
-                        {reschedules[0]?.start_date ? new Date(reschedules[0].start_date).toLocaleDateString() : 'N/A'}
-                      </div>
-                    ) : (
-                      <input
-                        type="date"
-                        value={editData.startDate ?? ''}
-                        onChange={(e) => setEditData({ ...editData, startDate: e.target.value })}
-                        className="w-full h-12 px-4 bg-gray-800 border border-gray-700 text-white rounded-lg focus:border-yellow-500 focus:ring-2 focus:ring-yellow-500/20 focus:outline-none transition-all duration-200"
-                        required
-                      />
-                    )}
-                  </div>
-                
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="bg-gray-800/50 rounded-xl p-6 border border-gray-700/50">
+                  <label className="block text-sm font-medium text-gray-300 mb-3">
+                    Start Date
+                  </label>
+                  {mode === 'view' ? (
+                    <div className="h-12 flex items-center px-4 bg-gray-800 rounded-lg text-white">
+                      {program?.startDate ? new Date(program.startDate).toLocaleDateString() : (program as any)?.start_date ? new Date((program as any).start_date).toLocaleDateString() : 'N/A'}
+                    </div>
+                  ) : (
+                    <input
+                      type="date"
+                      value={editData.startDate ?? ''}
+                      onChange={(e) => setEditData({ ...editData, startDate: e.target.value })}
+                      className="w-full h-12 px-4 bg-gray-800 border border-gray-700 text-white rounded-lg focus:border-yellow-500 focus:ring-2 focus:ring-yellow-500/20 focus:outline-none transition-all duration-200"
+                      required
+                    />
+                  )}
+                </div>
+              
                 <div className="bg-gray-800/50 rounded-xl p-6 border border-gray-700/50">
                   <label className="block text-sm font-medium text-gray-300 mb-3">
                     End Date
                   </label>
                   {mode === 'view' ? (
                     <div className="h-12 flex items-center px-4 bg-gray-800 rounded-lg text-white">
-                      {reschedules[0]?.end_date ? new Date(reschedules[0].end_date).toLocaleDateString() : 'N/A'}
+                      {program?.endDate ? new Date(program.endDate).toLocaleDateString() : (program as any)?.end_date ? new Date((program as any).end_date).toLocaleDateString() : 'N/A'}
                     </div>
                   ) : (
                     <input
@@ -682,8 +461,43 @@ const transformedReschedules = reschedules.map((reschedule: any) => {
                   )}
                 </div>
               </div>
+
+              {/* Status */}
+              <div className="bg-gray-800/50 rounded-xl p-6 border border-gray-700/50">
+                <label className="block text-sm font-medium text-gray-300 mb-3">
+                  <Calendar className="w-4 h-4 inline mr-2" />
+                  Status
+                </label>
+                {mode === 'view' ? (
+                  <div className="h-12 flex items-center px-4 bg-gray-800 rounded-lg">
+                    {(() => {
+                      const rawStatus = (program as any)?.status ?? (program as any)?.active;
+                      const normalized = normalizeStatus(rawStatus);
+                      const badgeClass = normalized === 'active'
+                        ? 'text-green-400 bg-green-400/10'
+                        : normalized === 'inactive'
+                          ? 'text-gray-300 bg-gray-400/10'
+                          : 'text-yellow-400 bg-yellow-400/10';
+                      const label = normalized.charAt(0).toUpperCase() + normalized.slice(1);
+                      return (
+                        <span className={`inline-flex px-3 py-1 text-xs font-medium rounded-full ${badgeClass}`}>
+                          {label}
+                        </span>
+                      );
+                    })()}
+                  </div>
+                ) : (
+                  <select
+                    value={editData.status === 'active' || editData.status === 'inactive' ? editData.status : 'active'}
+                    onChange={(e) => setEditData({ ...editData, status: e.target.value === 'active' ? 'active' : 'inactive' })}
+                    className="w-full h-12 px-4 bg-gray-800 border border-gray-700 text-white rounded-lg focus:border-yellow-500 focus:ring-2 focus:ring-yellow-500/20 focus:outline-none transition-all duration-200"
+                  >
+                    <option value="active">Active</option>
+                    <option value="inactive">Inactive</option>
+                  </select>
+                )}
+              </div>
               
-              Mentor Reschedules Section
               {mode === 'view' && (
                 <div className="mt-8 pt-8 border-t border-gray-700">
                   <div className="mb-6">

@@ -1,5 +1,7 @@
+
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { Calendar, Video, FileText, Github, Award, Clock, Users, BookOpen, PlayCircle, CheckCircle, AlertCircle, Upload, File, X, Mail, Phone, Briefcase, User, ChevronDown, LogOut, Settings } from 'lucide-react';
+
 import { useApi } from '../../services/api';
 import { useAuth } from '../../contexts/AuthContext';
 
@@ -28,13 +30,56 @@ interface Recording {
   program: string;
 }
 
-interface Assignment {
-  id: string;
+interface StudentAssignmentListItem {
+  studentAssignmentId: string;
+  assignmentId: string;
   title: string;
   program: string;
-  dueDate: string;
-  status: 'pending' | 'submitted' | 'graded';
-  grade?: string;
+  batchName?: string;
+  dueDate?: string;
+  status: 'pending' | 'submitted' | 'graded' | 'in_progress';
+  obtainedMarks?: number | null;
+  totalMarks?: number | null;
+  gradeLabel?: string;
+  assignmentType?: string;
+  submittedAt?: string | null;
+  startedAt?: string | null;
+}
+
+interface AssignmentDetailData {
+  assignment: {
+    id: string;
+    title: string;
+    description?: string | null;
+    assignment_type?: string | null;
+    total_marks?: number | null;
+    passing_marks?: number | null;
+    due_date?: string | null;
+    allow_late_submission?: boolean;
+    time_limit_minutes?: number | null;
+    batches?: {
+      batch_name?: string;
+    } | null;
+    courses?: {
+      course_code?: string;
+    } | null;
+  };
+  questions: Array<{
+    id: string;
+    question_text: string;
+    question_type: string;
+    marks: number;
+    options?: any;
+    hint?: string | null;
+    question_order?: number | null;
+  }>;
+  student_assignment: {
+    id: string;
+    status: string;
+    started_at?: string | null;
+    submitted_at?: string | null;
+    attempt_number?: number | null;
+  } | null;
 }
 
 interface GitHubContribution {
@@ -93,6 +138,250 @@ const StudentProfile = () => {
       program: 'Node.js',
     },
   ]);
+
+  // Assignment state
+  const [assignments, setAssignments] = useState<StudentAssignmentListItem[]>([]);
+  const [loadingAssignments, setLoadingAssignments] = useState<boolean>(true);
+  const [assignmentsError, setAssignmentsError] = useState<string | null>(null);
+  const [assignmentDetailModalOpen, setAssignmentDetailModalOpen] = useState(false);
+  const [selectedAssignment, setSelectedAssignment] = useState<StudentAssignmentListItem | null>(null);
+  const [assignmentDetail, setAssignmentDetail] = useState<AssignmentDetailData | null>(null);
+  const [assignmentDetailLoading, setAssignmentDetailLoading] = useState(false);
+  const [assignmentDetailError, setAssignmentDetailError] = useState<string | null>(null);
+  const [detailUploadFile, setDetailUploadFile] = useState<File | null>(null);
+  const [uploadingAssignment, setUploadingAssignment] = useState(false);
+  const [assignmentSuccessMessage, setAssignmentSuccessMessage] = useState<string | null>(null);
+
+  const normalizeAssignmentStatus = (status?: string | null, obtainedMarks?: number | null): StudentAssignmentListItem['status'] => {
+    const lower = (status || '').toLowerCase();
+    if (lower === 'graded' || typeof obtainedMarks === 'number') return 'graded';
+    if (lower === 'submitted') return 'submitted';
+    if (lower === 'in_progress') return 'in_progress';
+    return 'pending';
+  };
+
+  const mapAssignmentFromApi = (item: any): StudentAssignmentListItem => {
+    const assignmentData = item?.assignments || {};
+    const status = normalizeAssignmentStatus(item?.status, item?.obtained_marks);
+    const totalMarks = assignmentData?.total_marks ?? null;
+    const obtainedMarks = item?.obtained_marks ?? null;
+    const gradeLabel = obtainedMarks !== null && totalMarks !== null ? `${obtainedMarks}/${totalMarks}` : undefined;
+
+    return {
+      studentAssignmentId: item?.id || item?.student_assignment_id || '',
+      assignmentId: item?.assignment_id || assignmentData?.id || '',
+      title: assignmentData?.title || 'Untitled Assignment',
+      program: assignmentData?.courses?.course_code || '—',
+      batchName: assignmentData?.batches?.batch_name || undefined,
+      dueDate: assignmentData?.due_date || null,
+      status,
+      obtainedMarks,
+      totalMarks,
+      gradeLabel,
+      assignmentType: assignmentData?.assignment_type || undefined,
+      submittedAt: item?.submitted_at || null,
+      startedAt: item?.started_at || null,
+    };
+  };
+
+  const formatDate = (iso?: string | null) => {
+    if (!iso) return '—';
+    try {
+      return new Date(iso).toLocaleDateString('en-US', {
+        month: 'short',
+        day: 'numeric',
+        year: 'numeric',
+      });
+    } catch {
+      return '—';
+    }
+  };
+
+  const formatDateTime = (iso?: string | null) => {
+    if (!iso) return '—';
+    try {
+      return new Date(iso).toLocaleString('en-US', {
+        month: 'short',
+        day: 'numeric',
+        year: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit',
+      });
+    } catch {
+      return '—';
+    }
+  };
+
+  const getAssignmentStatusMeta = (status: StudentAssignmentListItem['status']) => {
+    switch (status) {
+      case 'submitted':
+        return { label: 'Submitted', className: 'bg-blue-500/20 text-blue-300 border-blue-500/40', dot: 'bg-blue-400' };
+      case 'graded':
+        return { label: 'Graded', className: 'bg-green-500/20 text-green-300 border-green-500/40', dot: 'bg-green-400' };
+      case 'in_progress':
+        return { label: 'In Progress', className: 'bg-purple-500/20 text-purple-300 border-purple-500/40', dot: 'bg-purple-400' };
+      default:
+        return { label: 'Pending', className: 'bg-[#FFC540]/20 text-[#FFC540] border-[#FFC540]/40', dot: 'bg-[#FFC540]' };
+    }
+  };
+
+  const renderStatusBadge = (status: StudentAssignmentListItem['status']) => {
+    const meta = getAssignmentStatusMeta(status);
+    return (
+      <span className={`px-3 py-1 rounded-full text-xs font-semibold border ${meta.className} flex items-center gap-1`}>
+        <span className={`w-2 h-2 rounded-full ${meta.dot}`}></span>
+        {meta.label}
+      </span>
+    );
+  };
+
+  useEffect(() => {
+    let active = true;
+
+    const fetchAssignments = async () => {
+      try {
+        setLoadingAssignments(true);
+        setAssignmentsError(null);
+        const response = await api.lms.students.getAssignments();
+        const raw = Array.isArray(response?.data) ? response.data : [];
+        if (!active) return;
+        setAssignments(raw.map(mapAssignmentFromApi));
+      } catch (error: any) {
+        if (active) {
+          setAssignmentsError(error?.message || 'Failed to load assignments');
+        }
+      } finally {
+        if (active) {
+          setLoadingAssignments(false);
+        }
+      }
+    };
+
+    fetchAssignments();
+    return () => {
+      active = false;
+    };
+  }, [api.lms.students]);
+
+  const loadAssignmentDetail = async (assignmentId: string) => {
+    setAssignmentDetailLoading(true);
+    setAssignmentDetailError(null);
+    try {
+      const response = await api.lms.students.getAssignmentDetails(assignmentId);
+      setAssignmentDetail(response?.data || null);
+    } catch (error: any) {
+      setAssignmentDetailError(error?.message || 'Failed to load assignment details');
+    } finally {
+      setAssignmentDetailLoading(false);
+    }
+  };
+
+  const openAssignmentDetail = (item: StudentAssignmentListItem) => {
+    setSelectedAssignment(item);
+    setAssignmentDetailModalOpen(true);
+    setAssignmentSuccessMessage(null);
+    setDetailUploadFile(null);
+    loadAssignmentDetail(item.assignmentId);
+  };
+
+  const closeAssignmentDetail = () => {
+    setAssignmentDetailModalOpen(false);
+    setSelectedAssignment(null);
+    setAssignmentDetail(null);
+    setDetailUploadFile(null);
+    setAssignmentDetailError(null);
+    setAssignmentSuccessMessage(null);
+  };
+
+  const handleDetailFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    if (event.target.files && event.target.files[0]) {
+      const file = event.target.files[0];
+      console.log('📁 File selected:', file.name, file.size, file.type);
+      setDetailUploadFile(file);
+      setAssignmentDetailError(null); // Clear any previous errors
+    } else {
+      console.log('❌ No file selected');
+      setDetailUploadFile(null);
+    }
+  };
+
+  const handleAssignmentSubmit = async () => {
+    console.log('🚀 Submitting assignment...', {
+      selectedAssignment: selectedAssignment?.assignmentId,
+      hasFile: !!detailUploadFile,
+      fileName: detailUploadFile?.name,
+      fileSize: detailUploadFile?.size,
+      userId: user?.id,
+      canUpload: canUploadAssignment,
+      status: detailStatus
+    });
+
+    if (!selectedAssignment) {
+      setAssignmentDetailError('No assignment selected');
+      return;
+    }
+    if (!detailUploadFile) {
+      setAssignmentDetailError('Please select a file to upload');
+      return;
+    }
+    if (!user?.id) {
+      setAssignmentDetailError('Student ID not available. Please re-login.');
+      return;
+    }
+    if (!canUploadAssignment) {
+      setAssignmentDetailError('This assignment has already been submitted or graded. Cannot upload again.');
+      return;
+    }
+
+    const formData = new FormData();
+    formData.append('assignmentId', selectedAssignment.assignmentId);
+    formData.append('studentId', user.id);
+    formData.append('file', detailUploadFile);
+
+    console.log('📤 FormData created:', {
+      assignmentId: selectedAssignment.assignmentId,
+      studentId: user.id,
+      fileName: detailUploadFile.name,
+      fileSize: detailUploadFile.size,
+      fileType: detailUploadFile.type
+    });
+
+    setUploadingAssignment(true);
+    setAssignmentDetailError(null);
+    setAssignmentSuccessMessage(null);
+
+    try {
+      console.log('📡 Calling submitAssignment API...');
+      const response = await api.lms.students.submitAssignment(formData);
+      console.log('✅ Submit response:', response);
+      
+      const successMessage = response?.message || response?.data?.message || 'Assignment submitted successfully';
+      setAssignmentSuccessMessage(successMessage);
+      setDetailUploadFile(null);
+
+      // Refresh assignment detail to get updated status
+      await loadAssignmentDetail(selectedAssignment.assignmentId);
+      
+      // Refresh assignments list
+      try {
+        const refresh = await api.lms.students.getAssignments();
+        const raw = Array.isArray(refresh?.data) ? refresh.data : [];
+        const mapped = raw.map(mapAssignmentFromApi);
+        setAssignments(mapped);
+        const updated = mapped.find((item: StudentAssignmentListItem) => item.assignmentId === selectedAssignment.assignmentId);
+        if (updated) {
+          setSelectedAssignment(updated);
+        }
+      } catch (refreshError) {
+        console.error('Failed to refresh assignments after submission', refreshError);
+      }
+    } catch (error: any) {
+      console.error('❌ Submit error:', error);
+      setAssignmentDetailError(error?.message || 'Failed to submit assignment. Please try again.');
+    } finally {
+      setUploadingAssignment(false);
+    }
+  };
 
   // Schedule state
   const [allClasses, setAllClasses] = useState<UpcomingClass[]>([]);
@@ -573,31 +862,6 @@ const StudentProfile = () => {
     },
   ];
 
-  const assignments: Assignment[] = [
-    {
-      id: '1',
-      title: 'Build a Custom Hook',
-      program: 'React.js',
-      dueDate: 'Oct 5, 2025',
-      status: 'pending',
-    },
-    {
-      id: '2',
-      title: 'API Integration Project',
-      program: 'Node.js',
-      dueDate: 'Oct 3, 2025',
-      status: 'submitted',
-    },
-    {
-      id: '3',
-      title: 'Data Analysis Script',
-      program: 'Python',
-      dueDate: 'Sep 30, 2025',
-      status: 'graded',
-      grade: 'A',
-    },
-  ];
-
   const githubContributions: GitHubContribution[] = [
     {
       type: 'PR',
@@ -621,6 +885,16 @@ const StudentProfile = () => {
       status: 'open',
     },
   ];
+
+  const detailStatus = normalizeAssignmentStatus(
+    assignmentDetail?.student_assignment?.status || selectedAssignment?.status,
+    selectedAssignment?.obtainedMarks ?? null
+  );
+  const canUploadAssignment = detailStatus !== 'submitted' && detailStatus !== 'graded';
+  const detailDueDate = assignmentDetail?.assignment?.due_date || selectedAssignment?.dueDate || null;
+  const detailProgram = assignmentDetail?.assignment?.courses?.course_code || selectedAssignment?.program || '—';
+  const detailBatch = assignmentDetail?.assignment?.batches?.batch_name || selectedAssignment?.batchName || null;
+  const detailTotalMarks = assignmentDetail?.assignment?.total_marks ?? selectedAssignment?.totalMarks ?? null;
 
   return (
     <div className="min-h-screen bg-[#0A0E1A]">
@@ -786,9 +1060,9 @@ const StudentProfile = () => {
                   <BookOpen className="w-8 h-8 text-gray-400" />
                   <span className="text-green-400 text-sm font-medium flex items-center gap-1">
                     <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" />
+                      {/* <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" /> */}
                     </svg>
-                    12%
+                    {/* 12% */}
                   </span>
                 </div>
                 <div className="text-3xl font-bold text-white mb-1">{studentData.totalClasses}</div>
@@ -800,9 +1074,9 @@ const StudentProfile = () => {
                   <Users className="w-8 h-8 text-gray-400" />
                   <span className="text-green-400 text-sm font-medium flex items-center gap-1">
                     <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" />
+                      {/* <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" /> */}
                     </svg>
-                    8%
+                    {/* 8% */}
                   </span>
                 </div>
                 <div className="text-3xl font-bold text-white mb-1">{studentData.enrolledPrograms.length}</div>
@@ -814,9 +1088,9 @@ const StudentProfile = () => {
                   <Calendar className="w-8 h-8 text-gray-400" />
                   <span className="text-green-400 text-sm font-medium flex items-center gap-1">
                     <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" />
+                      {/* <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" /> */}
                     </svg>
-                    5%
+                    {/* 5% */}
                   </span>
                 </div>
                 <div className="text-3xl font-bold text-white mb-1">{studentData.githubContributions}</div>
@@ -828,9 +1102,9 @@ const StudentProfile = () => {
                   <Award className="w-8 h-8 text-gray-400" />
                   <span className="text-green-400 text-sm font-medium flex items-center gap-1">
                     <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" />
+                      {/* <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" /> */}
                     </svg>
-                    2%
+                    {/* 2% */}
                   </span>
                 </div>
                 <div className="text-3xl font-bold text-white mb-1">{studentData.attendanceRate}%</div>
@@ -1053,31 +1327,42 @@ const StudentProfile = () => {
                     Assignments
                   </h2>
                   <div className="space-y-3">
-                    {assignments.map((assignment) => (
+                    {loadingAssignments && (
+                      <div className="text-gray-400 text-sm">Loading assignments...</div>
+                    )}
+                    {!loadingAssignments && assignmentsError && (
+                      <div className="text-red-400 text-sm">{assignmentsError}</div>
+                    )}
+                    {!loadingAssignments && !assignmentsError && assignments.length === 0 && (
+                      <div className="text-gray-400 text-sm">No assignments yet.</div>
+                    )}
+                    {!loadingAssignments && !assignmentsError && assignments.slice(0, 3).map((assignment) => (
                       <div
-                        key={assignment.id}
+                        key={assignment.studentAssignmentId || assignment.assignmentId}
                         className="bg-[#0d1420] rounded-lg p-4 border border-gray-800 hover:border-gray-700 transition-all"
                       >
-                        <div className="flex items-start justify-between mb-2">
-                          <h3 className="text-white font-medium text-sm">{assignment.title}</h3>
-                          {assignment.status === 'graded' && (
-                            <CheckCircle className="w-4 h-4 text-green-400" />
-                          )}
-                          {assignment.status === 'submitted' && (
-                            <Clock className="w-4 h-4 text-blue-400" />
-                          )}
-                          {assignment.status === 'pending' && (
-                            <AlertCircle className="w-4 h-4 text-[#FFC540]" />
-                          )}
-                        </div>
-                        <p className="text-gray-400 text-xs mb-2">{assignment.program}</p>
-                        <div className="flex items-center justify-between text-xs">
-                          <span className="text-gray-500">Due: {assignment.dueDate}</span>
-                          {assignment.grade && (
-                            <span className="px-2 py-1 bg-green-400/20 text-green-400 rounded font-semibold">
-                              {assignment.grade}
-                            </span>
-                          )}
+                        <div className="flex items-start justify-between">
+                          <div>
+                            <div className="flex items-center gap-2 mb-2">
+                              <h3 className="text-white font-medium text-sm">{assignment.title}</h3>
+                              {renderStatusBadge(assignment.status)}
+                              {assignment.gradeLabel && assignment.status === 'graded' && (
+                                <span className="px-2 py-1 bg-green-500/20 text-green-300 rounded-full text-xs font-semibold">
+                                  Grade: {assignment.gradeLabel}
+                                </span>
+                              )}
+                            </div>
+                            <div className="flex flex-col text-xs text-gray-400 gap-1">
+                              <span>Program: {assignment.program}</span>
+                              {assignment.dueDate && <span>Due: {formatDate(assignment.dueDate)}</span>}
+                            </div>
+                          </div>
+                          <button
+                            onClick={() => openAssignmentDetail(assignment)}
+                            className="ml-4 px-4 py-2 bg-[#FFC540] text-black rounded-lg font-semibold hover:bg-[#FFC540] transition-all text-xs"
+                          >
+                            {assignment.status === 'pending' ? 'Submit' : 'Details'}
+                          </button>
                         </div>
                       </div>
                     ))}
@@ -1283,72 +1568,94 @@ const StudentProfile = () => {
 
         {activeTab === 'assignments' && (
           <div className="bg-[#1a2332] rounded-xl p-6 border border-gray-800">
-            <h2 className="text-xl font-bold text-white mb-6">Assignments</h2>
-            <div className="space-y-4">
-              {assignments.map((assignment) => (
-                <div
-                  key={assignment.id}
-                  className="bg-[#0d1420] rounded-lg p-6 border border-gray-800 hover:border-gray-700 transition-all"
-                >
-                  <div className="flex items-start justify-between">
-                    <div className="flex-1">
-                      <div className="flex items-center gap-3 mb-3">
-                        <h3 className="text-lg font-semibold text-white">{assignment.title}</h3>
-                        {assignment.status === 'graded' && (
-                          <span className="px-3 py-1 bg-green-400/20 text-green-400 rounded-full text-sm font-semibold flex items-center gap-1">
-                            <CheckCircle className="w-4 h-4" />
-                            Graded
-                          </span>
-                        )}
-                        {assignment.status === 'submitted' && (
-                          <span className="px-3 py-1 bg-blue-400/20 text-blue-400 rounded-full text-sm font-semibold flex items-center gap-1">
-                            <Clock className="w-4 h-4" />
-                            Submitted
-                          </span>
-                        )}
-                        {assignment.status === 'pending' && (
-                          <span className="px-3 py-1 bg-[#FFC540]/20 text-[#FFC540] rounded-full text-sm font-semibold flex items-center gap-1">
-                            <AlertCircle className="w-4 h-4" />
-                            Pending
-                          </span>
-                        )}
-                      </div>
-                      <div className="flex items-center gap-6 text-gray-400 text-sm">
-                        <span className="flex items-center gap-2">
-                          <BookOpen className="w-4 h-4" />
-                          {assignment.program}
-                        </span>
-                        <span className="flex items-center gap-2">
-                          <Calendar className="w-4 h-4" />
-                          Due: {assignment.dueDate}
-                        </span>
-                        {assignment.grade && (
-                          <span className="px-4 py-1 bg-green-400/20 text-green-400 rounded-lg font-bold text-base">
-                            Grade: {assignment.grade}
-                          </span>
-                        )}
-                      </div>
-                    </div>
-                    {assignment.status === 'pending' && (
-                      <button className="ml-6 px-6 py-3 bg-[#FFC540] text-black rounded-lg font-bold hover:bg-[#FFC540] transition-all text-sm">
-                        Submit Assignment
-                      </button>
-                    )}
-                    {assignment.status !== 'pending' && (
-                      <button className="ml-6 px-6 py-3 bg-[#1a2332] text-white border border-gray-700 rounded-lg font-bold hover:bg-[#243044] transition-all text-sm">
-                        View Details
-                      </button>
-                    )}
-                  </div>
-                </div>
-              ))}
+            <div className="flex items-center justify-between mb-6">
+              <h2 className="text-xl font-bold text-white">Assignments</h2>
+              <span className="text-sm text-gray-400">Total: {assignments.length}</span>
             </div>
+
+            {loadingAssignments && (
+              <div className="text-gray-400 py-6">Loading assignments...</div>
+            )}
+
+            {!loadingAssignments && assignmentsError && (
+              <div className="text-red-400 py-6">{assignmentsError}</div>
+            )}
+
+            {!loadingAssignments && !assignmentsError && assignments.length === 0 && (
+              <div className="text-gray-400 py-6">No assignments available yet. Check back soon!</div>
+            )}
+
+            {!loadingAssignments && !assignmentsError && assignments.length > 0 && (
+              <div className="space-y-4">
+                {assignments.map((assignment) => (
+                  <div
+                    key={assignment.studentAssignmentId || assignment.assignmentId}
+                    className="bg-[#0d1420] rounded-lg p-6 border border-gray-800 hover:border-gray-700 transition-all"
+                  >
+                    <div className="flex items-start justify-between">
+                      <div className="flex-1">
+                        <div className="flex flex-wrap items-center gap-3 mb-3">
+                          <h3 className="text-lg font-semibold text-white">{assignment.title}</h3>
+                          {renderStatusBadge(assignment.status)}
+                          {assignment.gradeLabel && assignment.status === 'graded' && (
+                            <span className="px-3 py-1 bg-green-500/20 text-green-300 rounded-full text-sm font-semibold">
+                              Grade: {assignment.gradeLabel}
+                            </span>
+                          )}
+                        </div>
+                        <div className="flex flex-wrap items-center gap-6 text-gray-400 text-sm">
+                          <span className="flex items-center gap-2">
+                            <BookOpen className="w-4 h-4" />
+                            {assignment.program}
+                          </span>
+                          {assignment.batchName && (
+                            <span className="flex items-center gap-2">
+                              <Users className="w-4 h-4" />
+                              {assignment.batchName}
+                            </span>
+                          )}
+                          {assignment.dueDate && (
+                            <span className="flex items-center gap-2">
+                              <Calendar className="w-4 h-4" />
+                              Due: {formatDate(assignment.dueDate)}
+                            </span>
+                          )}
+                          {assignment.assignmentType && (
+                            <span className="flex items-center gap-2">
+                              <FileText className="w-4 h-4" />
+                              {assignment.assignmentType}
+                            </span>
+                          )}
+                          {assignment.totalMarks !== null && (
+                            <span className="flex items-center gap-2">
+                              <Award className="w-4 h-4" />
+                              Total Marks: {assignment.totalMarks}
+                            </span>
+                          )}
+                        </div>
+                        {assignment.submittedAt && (
+                          <div className="mt-3 text-xs text-gray-500">
+                            Last submitted: {formatDateTime(assignment.submittedAt)}
+                          </div>
+                        )}
+                      </div>
+                      <button
+                        onClick={() => openAssignmentDetail(assignment)}
+                        className="ml-6 px-6 py-3 bg-[#FFC540] text-black rounded-lg font-bold hover:bg-[#FFC540] transition-all text-sm"
+                      >
+                        {assignment.status === 'pending' ? 'Submit Assignment' : 'View Details'}
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         )}
 
         {activeTab === 'contributions' && (
           <div className="space-y-6">
-            <div className="bg-[#1a2332] rounded-xl p-6 border border-gray-800">
+            {/* <div className="bg-[#1a2332] rounded-xl p-6 border border-gray-800">
               <div className="flex items-center justify-between mb-6">
                 <h2 className="text-xl font-bold text-white flex items-center gap-2">
                   <Upload className="w-6 h-6" />
@@ -1407,7 +1714,7 @@ const StudentProfile = () => {
                   </div>
                 ))}
               </div>
-            </div>
+            </div> */}
 
             <div className="bg-[#1a2332] rounded-xl p-6 border border-gray-800">
               <div className="flex items-center justify-between mb-6">
@@ -1475,6 +1782,155 @@ const StudentProfile = () => {
           </div>
         )}
       </div>
+
+      {assignmentDetailModalOpen && (
+        <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 px-4 py-6">
+          <div className="bg-[#101728] border border-gray-800 rounded-2xl shadow-2xl w-full max-w-4xl max-h-[90vh] overflow-hidden">
+            <div className="px-6 py-5 border-b border-gray-800 flex items-center justify-between">
+              <div>
+                <h3 className="text-2xl font-bold text-white">
+                  {assignmentDetail?.assignment?.title || selectedAssignment?.title || 'Assignment'}
+                </h3>
+                <div className="flex flex-wrap items-center gap-3 text-sm text-gray-400 mt-2">
+                  {renderStatusBadge(detailStatus)}
+                  <span className="flex items-center gap-2">
+                    <BookOpen className="w-4 h-4" />
+                    {detailProgram}
+                  </span>
+                  {detailBatch && (
+                    <span className="flex items-center gap-2">
+                      <Users className="w-4 h-4" />
+                      {detailBatch}
+                    </span>
+                  )}
+                  {detailDueDate && (
+                    <span className="flex items-center gap-2">
+                      <Calendar className="w-4 h-4" />
+                      Due: {formatDate(detailDueDate)}
+                    </span>
+                  )}
+                </div>
+              </div>
+              <button
+                onClick={closeAssignmentDetail}
+                className="text-gray-400 hover:text-white transition"
+              >
+                <X className="w-6 h-6" />
+              </button>
+            </div>
+
+            <div className="px-6 py-5 space-y-4 overflow-y-auto max-h-[65vh]">
+              {assignmentDetailLoading ? (
+                <div className="py-10 text-center text-gray-400">Loading assignment details...</div>
+              ) : assignmentDetail ? (
+                <>
+                  {assignmentDetailError && (
+                    <div className="bg-red-500/10 border border-red-500/30 text-red-300 text-sm rounded-lg px-4 py-3">
+                      {assignmentDetailError}
+                    </div>
+                  )}
+                  {assignmentSuccessMessage && (
+                    <div className="bg-green-500/10 border border-green-500/30 text-green-300 text-sm rounded-lg px-4 py-3">
+                      {assignmentSuccessMessage}
+                    </div>
+                  )}
+
+                  <div className="bg-[#152033] rounded-xl p-6 border border-gray-800 space-y-4">
+                    <h4 className="text-lg font-semibold text-white">Task Description</h4>
+                    {assignmentDetail.assignment.description ? (
+                      <p className="text-gray-300 leading-relaxed text-sm whitespace-pre-wrap">
+                        {assignmentDetail.assignment.description}
+                      </p>
+                    ) : (
+                      <p className="text-gray-400 text-sm italic">No description provided for this assignment.</p>
+                    )}
+                  </div>
+
+                  <div className="bg-[#152033] rounded-xl p-6 border border-gray-800">
+                    <h4 className="text-lg font-semibold text-white mb-4">Requirements</h4>
+                    <ol className="space-y-3 text-gray-300 text-sm list-decimal pl-5">
+                      {assignmentDetail.questions && assignmentDetail.questions.length > 0 ? (
+                        assignmentDetail.questions.map((question, index) => (
+                          <li key={question.id || index} className="space-y-1">
+                            <p className="font-semibold text-white">{question.question_text}</p>
+                            {question.question_type && (
+                              <p className="text-gray-400 text-xs">{question.question_type}</p>
+                            )}
+                            <p className="text-gray-500 text-xs">Marks: {question.marks}</p>
+                          </li>
+                        ))
+                      ) : (
+                        <li className="text-gray-400">No specific requirements provided.</li>
+                      )}
+                    </ol>
+                  </div>
+
+                  <div className="bg-[#152033] rounded-xl p-6 border border-gray-800">
+                    <h4 className="text-lg font-semibold text-white mb-3">Upload Assignment</h4>
+                    <p className="text-gray-400 text-sm mb-4">Upload your completed assignment (PDF, DOC, DOCX, TXT, ZIP, PNG, JPG). Max size 50MB.</p>
+                    <label
+                      className={`block border-2 border-dashed rounded-xl p-8 text-center transition ${canUploadAssignment ? 'border-gray-700 hover:border-[#FFC540] cursor-pointer' : 'border-gray-800 cursor-not-allowed'}`}
+                    >
+                      <input
+                        type="file"
+                        className="hidden"
+                        onChange={handleDetailFileChange}
+                        disabled={!canUploadAssignment || uploadingAssignment}
+                        accept=".pdf,.doc,.docx,.txt,.zip,.png,.jpg,.jpeg"
+                      />
+                      {detailUploadFile ? (
+                        <div className="space-y-2">
+                          <p className="text-white font-medium">{detailUploadFile.name}</p>
+                          <p className="text-gray-400 text-sm">{(detailUploadFile.size / (1024 * 1024)).toFixed(2)} MB</p>
+                        </div>
+                      ) : (
+                        <div className="space-y-2">
+                          <Upload className="w-12 h-12 text-gray-500 mx-auto" />
+                          <p className="text-white font-medium">
+                            {canUploadAssignment ? 'Click to upload or drag and drop' : 'Submission locked'}
+                          </p>
+                          <p className="text-gray-500 text-sm">Supported formats: PDF, DOC, DOCX, TXT, ZIP, PNG, JPG</p>
+                        </div>
+                      )}
+                    </label>
+                    {!canUploadAssignment && (
+                      <p className="mt-3 text-xs text-gray-500">
+                        You have already {detailStatus === 'graded' ? 'received a grade' : 'submitted'} for this assignment.
+                      </p>
+                    )}
+                  </div>
+                </>
+              ) : (
+                <div className="py-10 text-center text-red-400">
+                  {assignmentDetailError || 'Assignment details not available.'}
+                </div>
+              )}
+            </div>
+
+            <div className="px-6 py-5 border-t border-gray-800 flex items-center justify-end gap-3">
+              <button
+                onClick={closeAssignmentDetail}
+                className="px-5 py-2 rounded-lg bg-[#0d1524] text-white border border-gray-700 hover:bg-[#1a2332] transition"
+              >
+                Close
+              </button>
+              <button
+                onClick={handleAssignmentSubmit}
+                disabled={uploadingAssignment || !detailUploadFile || !canUploadAssignment}
+                className="px-5 py-2 rounded-lg bg-[#FFC540] text-black font-semibold hover:bg-[#e6b139] transition disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {uploadingAssignment 
+                  ? 'Submitting...' 
+                  : !detailUploadFile 
+                    ? 'Select a file to upload' 
+                    : !canUploadAssignment 
+                      ? 'Submission Locked' 
+                      : 'Submit Assignment'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {showUploadModal && (
         <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4">

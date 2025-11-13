@@ -117,8 +117,8 @@ const MentorSchedule: React.FC = () => {
         setError(null);
   
 
-        const facultyId = user?.id || '';
-        const resp = await api.lms.adminMentors.getAllSessions(facultyId);
+        // Use getFacultyStudents API which returns sessions with student_count
+        const resp = await api.lms.mentors.getFacultyStudents();
 
         const data = Array.isArray(resp) ? resp : (resp?.data ?? []);
   
@@ -153,6 +153,7 @@ const MentorSchedule: React.FC = () => {
   
         if (isMounted) setSessions(mapped);
       } catch (err: any) {
+        console.error('Error loading sessions:', err);
         if (isMounted) setError(err?.message ?? 'Failed to load sessions');
       } finally {
         if (isMounted) setLoading(false);
@@ -415,7 +416,7 @@ const MentorSchedule: React.FC = () => {
       </div>
 
       {/* Quick Schedule Form */}
-      <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+      {/* <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
         <h3 className="text-lg font-bold text-gray-900 mb-4">Quick Schedule</h3>
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
           <div>
@@ -457,7 +458,7 @@ const MentorSchedule: React.FC = () => {
             <span>Schedule Session</span>
           </button>
         </div>
-      </div>
+      </div> */}
 
       {/* Reschedule Modal */}
       {rescheduleModal.isOpen && (

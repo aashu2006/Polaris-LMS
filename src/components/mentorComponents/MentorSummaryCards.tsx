@@ -95,8 +95,8 @@ const MentorSummaryCards: React.FC = () => {
               <div className={`flex items-center text-sm font-medium ${
                 card.changeType === 'positive' ? 'text-green-400' : 'text-red-400'
               }`}>
-                <span className="mr-1">{card.changeType === 'positive' ? '↗' : '↘'}</span>
-                <span>{card.change}</span>
+                {/* <span className="mr-1">{card.changeType === 'positive' ? '↗' : '↘'}</span> */}
+                {/* <span>{card.change}</span> */}
               </div>
             </div>
             <div className="space-y-1">

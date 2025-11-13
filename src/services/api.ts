@@ -658,6 +658,38 @@ const lmsApi = {
       }, token);
     },
 
+    getAssignments: async (token: string) => {
+      return lmsApiRequest(`${LMS_BASE_URL}/api/v1/studentAssignments/assignments`, {
+        method: 'GET',
+      }, token);
+    },
+
+    getAssignmentDetails: async (assignmentId: string, token: string) => {
+      return lmsApiRequest(`${LMS_BASE_URL}/api/v1/studentAssignments/assignments/${assignmentId}`, {
+        method: 'GET',
+      }, token);
+    },
+
+    submitAssignment: async (formData: FormData, token: string) => {
+      const headers: Record<string, string> = {};
+      if (token) {
+        headers['Authorization'] = `Bearer ${token}`;
+      }
+
+      const response = await fetch(`${LMS_BASE_URL}/api/v1/studentAssignments/upload/assignment`, {
+        method: 'POST',
+        headers,
+        body: formData,
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(`HTTP ${response.status}: ${errorText}`);
+      }
+
+      return response.json();
+    },
+
     getDashboardCards: async (token: string) => {
       try {
         const [totalClasses, totalCourses, avgAttendance] = await Promise.all([
@@ -891,6 +923,14 @@ const lmsApi = {
     getAllCourses: async (token: string) => {
       return lmsApiRequest(`${LMS_BASE_URL}/api/v1/admin/mentors/getAllCourses`, {
         method: 'GET',
+      }, token);
+    },
+
+    createMentorGroup: async (groupData: any, token: string) => {
+      return lmsApiRequest(`${LMS_BASE_URL}/api/v1/admin/mentors/createGroup`, {
+        method: 'POST',
+        body: JSON.stringify(groupData),
+        headers: { 'Content-Type': 'application/json' },
       }, token);
     },
 
@@ -1343,6 +1383,9 @@ export const useApi = () => {
         getDashboardCards: () => lmsApi.students.getDashboardCards(token),
         getStudentDetails: (page: number, limit: number) => lmsApi.students.getStudentDetails(page, limit, token),
         getClassSchedule: () => lmsApi.students.getClassSchedule(token),
+        getAssignments: () => lmsApi.students.getAssignments(token),
+        getAssignmentDetails: (assignmentId: string) => lmsApi.students.getAssignmentDetails(assignmentId, token),
+        submitAssignment: (formData: FormData) => lmsApi.students.submitAssignment(formData, token),
       },
       mentors: {
         getAll: () => lmsApi.mentors.getAll(token),
@@ -1384,6 +1427,7 @@ export const useApi = () => {
         addMentor: (mentorData: any) => lmsApi.adminMentors.addMentor(mentorData, token),
         getAllBatches: () => lmsApi.adminMentors.getAllBatches(token),
         getAllCourses: () => lmsApi.adminMentors.getAllCourses(token),
+        createMentorGroup: (groupData: any) => lmsApi.adminMentors.createMentorGroup(groupData, token),
         getAllSessions: (mentorId: string) => lmsApi.adminMentors.getAllSessions(mentorId, token),
         getRescheduledSessions: () => lmsApi.adminMentors.getRescheduledSessions(token),
         getMentorReschedules: () => lmsApi.adminMentors.getMentorReschedules(token),
