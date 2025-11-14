@@ -1150,11 +1150,11 @@ const multimediaApi = {
       }
     },
 
-    getSessionStatus: async (sessionId: string, token: string) => {
-      return lmsApiRequest(`${MM_BASE_URL}/liveclass/session/${sessionId}/status`, {
-        method: 'GET',
-      }, token);
-    },
+    // getSessionStatus: async (sessionId: string, token: string) => {
+    //   return lmsApiRequest(`${MM_BASE_URL}/liveclass/session/${sessionId}/status`, {
+    //     method: 'GET',
+    //   }, token);
+    // },
 
     joinSession: async (sessionId: number, _entityName: string | undefined, deviceDetails: any, token: string, user?: any) => {
       const url = `${MM_BASE_URL}/liveclass/session/student/interactive-join-token`;
@@ -1472,7 +1472,7 @@ export const useApi = () => {
         getUpcoming: () => multimediaApi.sessions.getUpcoming(token),
         startSession: (sessionId: number, facultyId: string, batchId: number, facultyName: string) =>
           multimediaApi.sessions.startSession(sessionId, facultyId, batchId, facultyName, token),
-        getSessionStatus: (sessionId: string) => multimediaApi.sessions.getSessionStatus(sessionId, token),
+        // getSessionStatus: (sessionId: string) => multimediaApi.sessions.getSessionStatus(sessionId, token),
         joinSession: (sessionId: number, entityName?: string, deviceDetails?: any, providedToken?: string, user?: any) =>
           multimediaApi.sessions.joinSession(sessionId, entityName, deviceDetails, providedToken || token, user),
         endSession: (sessionId: number, facultyId: string) => multimediaApi.sessions.endSession(sessionId, facultyId, token),

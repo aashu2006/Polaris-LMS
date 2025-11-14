@@ -574,21 +574,21 @@ const StudentProfile = () => {
           }
 
           try {
-            const statusResponse = await api.multimedia.sessions.getSessionStatus(sessionIdStr);
-            const responseStatus =
-              statusResponse?.data?.status ||
-              statusResponse?.status ||
-              statusResponse?.data?.data?.status ||
-              statusResponse?.data?.session_status;
+            // const statusResponse = await api.multimedia.sessions.getSessionStatus(sessionIdStr);
+            // const responseStatus =
+            //   statusResponse?.data?.status ||
+            //   statusResponse?.status ||
+            //   statusResponse?.data?.data?.status ||
+            //   statusResponse?.data?.session_status;
 
-            const multimediaStatus =
-              typeof responseStatus === 'string' ? responseStatus.toLowerCase() : '';
-            if (['live', 'started', 'active'].includes(multimediaStatus)) {
-              liveIds.add(sessionIdStr);
-              liveStatusCacheRef.current[sessionIdStr] = { status: 'live', lastChecked: Date.now() };
-            } else {
-              liveStatusCacheRef.current[sessionIdStr] = { status: 'not_live', lastChecked: Date.now() };
-            }
+            // const multimediaStatus =
+            //   typeof responseStatus === 'string' ? responseStatus.toLowerCase() : '';
+            // if (['live', 'started', 'active'].includes(multimediaStatus)) {
+            //   liveIds.add(sessionIdStr);
+            //   liveStatusCacheRef.current[sessionIdStr] = { status: 'live', lastChecked: Date.now() };
+            // } else {
+            //   liveStatusCacheRef.current[sessionIdStr] = { status: 'not_live', lastChecked: Date.now() };
+            // }
           } catch (statusError) {
             const responseStatus = (statusError as any)?.response?.status ?? (statusError as any)?.status;
             if (responseStatus === 404 || responseStatus === 400 || responseStatus === 410) {
