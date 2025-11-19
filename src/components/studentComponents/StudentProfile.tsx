@@ -1,4 +1,3 @@
-
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { Calendar, Video, FileText, Github, Award, Clock, Users, BookOpen, PlayCircle, CheckCircle, AlertCircle, Upload, File, X, Mail, Phone, Briefcase, User, ChevronDown, LogOut, Settings } from 'lucide-react';
 
@@ -16,18 +15,37 @@ interface UpcomingClass {
   status: 'upcoming' | 'live' | 'completed' | 'postponed';
   rescheduled?: boolean;
   originalDate?: string;
-  epoch?: number; // timestamp for sorting/filtering
+  epoch?: number;
   joinUrl?: string;
 }
 
 interface Recording {
-  id: string;
+  id: number;
+  recordingId: number;
+  sessionId: number;
+  batchId: number;
   title: string;
-  mentor: string;
-  date: string;
-  duration: string;
-  thumbnail: string;
-  program: string;
+  duration: number;
+  status: string;
+  playlistUrl: string;
+  thumbnailUrl: string;
+  recordedAt: string;
+  availableAt: string;
+}
+
+interface RecordingsResponse {
+  status: string;
+  data: {
+    recordings: Recording[];
+    pagination: {
+      total: number;
+      totalPages: number | null;
+    };
+    studentId: string;
+    batchId: number;
+    status: string;
+  };
+  message: string;
 }
 
 interface StudentAssignmentListItem {
@@ -152,6 +170,24 @@ const StudentProfile = () => {
   const [uploadingAssignment, setUploadingAssignment] = useState(false);
   const [assignmentSuccessMessage, setAssignmentSuccessMessage] = useState<string | null>(null);
 
+  // Recordings state
+  const [recordings, setRecordings] = useState<Recording[]>([]);
+  const [loadingRecordings, setLoadingRecordings] = useState(true);
+  const [recordingsError, setRecordingsError] = useState<string | null>(null);
+
+  // Schedule state
+  const [allClasses, setAllClasses] = useState<UpcomingClass[]>([]);
+  const [loadingClasses, setLoadingClasses] = useState<boolean>(true);
+  const [classesError, setClassesError] = useState<string | null>(null);
+  const liveStatusCacheRef = useRef<Record<string, { status: 'live' | 'not_live'; lastChecked: number }>>({});
+
+  // Pagination state
+  const [upcomingPage, setUpcomingPage] = useState<number>(1);
+  const [upcomingPageSize] = useState<number>(5);
+  const [schedulePage, setSchedulePage] = useState<number>(1);
+  const [schedulePageSize] = useState<number>(10);
+  const [refreshingSchedule, setRefreshingSchedule] = useState(false);
+
   const normalizeAssignmentStatus = (status?: string | null, obtainedMarks?: number | null): StudentAssignmentListItem['status'] => {
     const lower = (status || '').toLowerCase();
     if (lower === 'graded' || typeof obtainedMarks === 'number') return 'graded';
@@ -212,6 +248,27 @@ const StudentProfile = () => {
     }
   };
 
+  const formatRecordingDuration = (seconds: number): string => {
+    const hrs = Math.floor(seconds / 3600);
+    const mins = Math.floor((seconds % 3600) / 60);
+    const secs = seconds % 60;
+    return `${hrs}:${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+  };
+
+  const formatRecordingDate = (dateString: string): string => {
+    const date = new Date(dateString);
+    return date.toLocaleDateString('en-US', { 
+      month: 'short', 
+      day: 'numeric', 
+      year: 'numeric' 
+    });
+  };
+
+  const handlePlayRecording = (recording: Recording) => {
+    const playlistUrl = `https://prod-video-transcoding.polariscampus.com/v1/vod/sessions/${recording.sessionId}/master-playlist`;
+    window.open(playlistUrl, '_blank');
+  };
+
   const getAssignmentStatusMeta = (status: StudentAssignmentListItem['status']) => {
     switch (status) {
       case 'submitted':
@@ -235,6 +292,7 @@ const StudentProfile = () => {
     );
   };
 
+  // Fetch assignments
   useEffect(() => {
     let active = true;
 
@@ -262,6 +320,47 @@ const StudentProfile = () => {
       active = false;
     };
   }, [api.lms.students]);
+
+  // Fetch recordings
+    useEffect(() => {
+      const fetchRecordings = async () => {
+        if (!user?.id) return;
+        
+        try {
+          setLoadingRecordings(true);
+          setRecordingsError(null);
+          
+          // Use the working student ID as fallback for testing
+          const testStudentId = '08faa382-56d6-4a7c-9482-ef6efdfa5bea';
+          const studentIdToUse = user.id || testStudentId;
+          
+          console.log('Fetching recordings for student:', studentIdToUse);
+          
+          const response: RecordingsResponse = await api.ums.students.getRecordings(studentIdToUse);
+          
+          if (response.status === 'success' && response.data.recordings) {
+            setRecordings(response.data.recordings);
+          } else {
+            setRecordingsError('Failed to fetch recordings');
+          }
+        } catch (err: any) {
+          console.error('Error fetching recordings:', err);
+          
+          // Show user-friendly error message
+          if (err?.message?.includes('multiple (or no) rows returned')) {
+            setRecordingsError('This student has multiple batches. Please contact support.');
+          } else if (err?.message?.includes('500')) {
+            setRecordingsError('Server error while fetching recordings. Please try again later.');
+          } else {
+            setRecordingsError(err?.message || 'Failed to load recordings');
+          }
+        } finally {
+          setLoadingRecordings(false);
+        }
+      };
+
+      fetchRecordings();
+    }, [user?.id, api.ums.students]);
 
   const loadAssignmentDetail = async (assignmentId: string) => {
     setAssignmentDetailLoading(true);
@@ -298,7 +397,7 @@ const StudentProfile = () => {
       const file = event.target.files[0];
       console.log('📁 File selected:', file.name, file.size, file.type);
       setDetailUploadFile(file);
-      setAssignmentDetailError(null); // Clear any previous errors
+      setAssignmentDetailError(null);
     } else {
       console.log('❌ No file selected');
       setDetailUploadFile(null);
@@ -359,10 +458,8 @@ const StudentProfile = () => {
       setAssignmentSuccessMessage(successMessage);
       setDetailUploadFile(null);
 
-      // Refresh assignment detail to get updated status
       await loadAssignmentDetail(selectedAssignment.assignmentId);
       
-      // Refresh assignments list
       try {
         const refresh = await api.lms.students.getAssignments();
         const raw = Array.isArray(refresh?.data) ? refresh.data : [];
@@ -382,19 +479,6 @@ const StudentProfile = () => {
       setUploadingAssignment(false);
     }
   };
-
-  // Schedule state
-  const [allClasses, setAllClasses] = useState<UpcomingClass[]>([]);
-  const [loadingClasses, setLoadingClasses] = useState<boolean>(true);
-  const [classesError, setClassesError] = useState<string | null>(null);
-  const liveStatusCacheRef = useRef<Record<string, { status: 'live' | 'not_live'; lastChecked: number }>>({});
-
-  // Pagination state
-  const [upcomingPage, setUpcomingPage] = useState<number>(1);
-  const [upcomingPageSize] = useState<number>(5);
-  const [schedulePage, setSchedulePage] = useState<number>(1);
-  const [schedulePageSize] = useState<number>(10);
-  const [refreshingSchedule, setRefreshingSchedule] = useState(false);
 
   const handleFileSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
     if (event.target.files && event.target.files[0]) {
@@ -439,7 +523,6 @@ const StudentProfile = () => {
         }
         setClassesError(null);
 
-        // Fetch all sessions (both scheduled and potentially live)
         const response = await api.lms.students.getClassSchedule();
 
         if (response && response.success === false) {
@@ -501,7 +584,7 @@ const StudentProfile = () => {
 
         const liveIds = new Set<string>();
         const nowMillis = now.getTime();
-        const CACHE_TTL = 60 * 1000; // 1 minute cache for status checks
+        const CACHE_TTL = 60 * 1000;
 
         for (const session of mapped) {
           const sessionIdStr = String(session.id);
@@ -574,21 +657,7 @@ const StudentProfile = () => {
           }
 
           try {
-            // const statusResponse = await api.multimedia.sessions.getSessionStatus(sessionIdStr);
-            // const responseStatus =
-            //   statusResponse?.data?.status ||
-            //   statusResponse?.status ||
-            //   statusResponse?.data?.data?.status ||
-            //   statusResponse?.data?.session_status;
-
-            // const multimediaStatus =
-            //   typeof responseStatus === 'string' ? responseStatus.toLowerCase() : '';
-            // if (['live', 'started', 'active'].includes(multimediaStatus)) {
-            //   liveIds.add(sessionIdStr);
-            //   liveStatusCacheRef.current[sessionIdStr] = { status: 'live', lastChecked: Date.now() };
-            // } else {
-            //   liveStatusCacheRef.current[sessionIdStr] = { status: 'not_live', lastChecked: Date.now() };
-            // }
+            // Status check logic commented out
           } catch (statusError) {
             const responseStatus = (statusError as any)?.response?.status ?? (statusError as any)?.status;
             if (responseStatus === 404 || responseStatus === 400 || responseStatus === 410) {
@@ -629,7 +698,6 @@ const StudentProfile = () => {
 
   const handleRefreshSchedule = () => fetchClassSchedule(false);
 
-  // Filter and paginate upcoming classes (session_datetime >= today)
   const todayStart = new Date();
   todayStart.setHours(0, 0, 0, 0);
   const todayTimestamp = todayStart.getTime();
@@ -651,15 +719,12 @@ const StudentProfile = () => {
     upcomingPage * upcomingPageSize
   );
 
-  // Paginate all classes for schedule tab (live first, then latest)
   const allClassesSorted = [...allClasses].sort((a, b) => {
-    // Sort by status first: live sessions appear first
     const aIsLive = a.status === 'live' ? 0 : 1;
     const bIsLive = b.status === 'live' ? 0 : 1;
     if (aIsLive !== bIsLive) {
       return aIsLive - bIsLive;
     }
-    // Then sort by date descending (latest first)
     return (b.epoch || 0) - (a.epoch || 0);
   });
   const scheduleTotalPages = Math.max(1, Math.ceil(allClassesSorted.length / schedulePageSize));
@@ -674,13 +739,11 @@ const StudentProfile = () => {
   const goNextSchedule = () => setSchedulePage(p => Math.min(scheduleTotalPages, p + 1));
 
   const handleJoinLiveClass = async (classItem: UpcomingClass, e?: React.MouseEvent<HTMLButtonElement>) => {
-    // Prevent default behavior and stop propagation to avoid page refresh
     if (e) {
       e.preventDefault();
       e.stopPropagation();
     }
 
-    // Prevent multiple clicks
     if (classItem.status !== 'live') {
       if (e) {
         e.preventDefault();
@@ -699,14 +762,11 @@ const StudentProfile = () => {
         throw new Error('Invalid session ID');
       }
 
-      // Check if we have a valid token before attempting to join
       const token = localStorage.getItem('accessToken') || localStorage.getItem('auth_token');
       if (!token) {
-        // Use modal instead of alert
         setJoinError('Your session has expired. Please login again.');
         setShowErrorModal(true);
         setIsJoiningSession(false);
-        // Redirect after a short delay - use replace to avoid adding to history
         setTimeout(() => {
           if (!window.location.pathname.includes('/student/login')) {
             window.location.replace('/student/login');
@@ -715,43 +775,36 @@ const StudentProfile = () => {
         return;
       }
 
-      // Call the join API to get session data
       try {
         const response = await api.multimedia.sessions.joinSession(
           sessionId,
-          classItem.program, // entityName (course name)
+          classItem.program,
           {
             deviceType: 'web',
             deviceName: navigator.userAgent,
             deviceVersion: navigator.appVersion,
           },
-          token, // explicitly pass current token
-          user // pass user object for studentId and studentName
+          token,
+          user
         );
 
-        // The API returns session data with HMS information
         const sessionData = response?.data || response;
 
         if (!sessionData) {
           throw new Error('No session data received');
         }
 
-        // Extract and save the live_class_token from HMS/Agora/AMS data
         let liveClassToken = null;
 
-        // For HMS sessions
         if (sessionData.hms?.token) {
           liveClassToken = sessionData.hms.token;
         }
-        // For Agora sessions
         else if (sessionData.agora?.agoraToken) {
           liveClassToken = sessionData.agora.agoraToken;
         }
-        // For AMS sessions
         else if (sessionData.ams?.token) {
           liveClassToken = sessionData.ams.token;
         }
-        // Fallback to top-level token if available
         else if (sessionData.token) {
           liveClassToken = sessionData.token;
         }
@@ -760,13 +813,11 @@ const StudentProfile = () => {
           localStorage.setItem('live_class_token', liveClassToken);
         }
 
-        // Store session data for the live class page
         localStorage.setItem('liveSessionData', JSON.stringify({
           sessionId,
           ...sessionData,
         }));
 
-        // Navigate to live class page
         window.location.href = `/student/live/${sessionId}`;
       } catch (apiError: any) {
         throw apiError;
@@ -778,33 +829,22 @@ const StudentProfile = () => {
       console.error('Failed to join live session:', error);
 
       const errorMessage = error?.message || error?.response?.data?.message || 'Failed to join session. Please try again.';
-      // Check both error.status and error.response.status
       const statusCode = error?.status ?? error?.response?.status;
 
-      // ONLY treat as auth error if we have a CONFIRMED 401 status code
-      // If statusCode is undefined/null, it's NOT an auth error
       const isAuthError = statusCode === 401;
 
       if (isAuthError) {
-        // Auth error - redirect to login
         setIsJoiningSession(false);
-        // Use replace to avoid adding to browser history
-        // Use a small delay to ensure React state updates complete
         setTimeout(() => {
-          // Double check we're not already on login page
           if (!window.location.pathname.includes('/student/login') &&
               !window.location.pathname.includes('/login')) {
             window.location.replace('/student/login');
           }
         }, 100);
       } else {
-        // Non-auth error OR error without status code
-        // Show error modal - DO NOT redirect or refresh
         setJoinError(errorMessage);
         setShowErrorModal(true);
         setIsJoiningSession(false);
-        // Explicitly DO NOT redirect or refresh
-        // The modal will handle closing, and the page will remain on the dashboard
       }
     }
   };
@@ -830,37 +870,6 @@ const StudentProfile = () => {
     totalAssignments: 20,
     githubContributions: 45,
   };
-
-
-  const recordings: Recording[] = [
-    {
-      id: '1',
-      title: 'Introduction to React Hooks',
-      mentor: 'Sarah Mitchell',
-      date: 'Oct 1, 2025',
-      duration: '1:45:30',
-      thumbnail: 'https://images.pexels.com/photos/577585/pexels-photo-577585.jpeg?auto=compress&cs=tinysrgb&w=400',
-      program: 'React.js',
-    },
-    {
-      id: '2',
-      title: 'RESTful API Design',
-      mentor: 'James Cooper',
-      date: 'Sep 29, 2025',
-      duration: '2:10:15',
-      thumbnail: 'https://images.pexels.com/photos/1181675/pexels-photo-1181675.jpeg?auto=compress&cs=tinysrgb&w=400',
-      program: 'Node.js',
-    },
-    {
-      id: '3',
-      title: 'Git Workflow Best Practices',
-      mentor: 'Emily Zhang',
-      date: 'Sep 28, 2025',
-      duration: '1:30:45',
-      thumbnail: 'https://images.pexels.com/photos/11035471/pexels-photo-11035471.jpeg?auto=compress&cs=tinysrgb&w=400',
-      program: 'DevOps',
-    },
-  ];
 
   const githubContributions: GitHubContribution[] = [
     {
@@ -940,7 +949,6 @@ const StudentProfile = () => {
                 </div>
               </button>
             </div>
-            {/* User Profile Dropdown */}
             <div className="relative">
               <button
                 onClick={() => setShowUserDropdown(!showUserDropdown)}
@@ -954,11 +962,8 @@ const StudentProfile = () => {
                 <ChevronDown className={`w-4 h-4 text-gray-400 transition-transform ${showUserDropdown ? 'rotate-180' : ''}`} />
               </button>
 
-
-              {/* Dropdown Menu */}
               {showUserDropdown && (
                 <>
-                  {/* Backdrop to close dropdown */}
                   <div
                     className="fixed inset-0 z-10"
                     onClick={() => setShowUserDropdown(false)}
@@ -1060,9 +1065,7 @@ const StudentProfile = () => {
                   <BookOpen className="w-8 h-8 text-gray-400" />
                   <span className="text-green-400 text-sm font-medium flex items-center gap-1">
                     <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      {/* <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" /> */}
                     </svg>
-                    {/* 12% */}
                   </span>
                 </div>
                 <div className="text-3xl font-bold text-white mb-1">{studentData.totalClasses}</div>
@@ -1074,9 +1077,7 @@ const StudentProfile = () => {
                   <Users className="w-8 h-8 text-gray-400" />
                   <span className="text-green-400 text-sm font-medium flex items-center gap-1">
                     <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      {/* <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" /> */}
                     </svg>
-                    {/* 8% */}
                   </span>
                 </div>
                 <div className="text-3xl font-bold text-white mb-1">{studentData.enrolledPrograms.length}</div>
@@ -1088,9 +1089,7 @@ const StudentProfile = () => {
                   <Calendar className="w-8 h-8 text-gray-400" />
                   <span className="text-green-400 text-sm font-medium flex items-center gap-1">
                     <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      {/* <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" /> */}
                     </svg>
-                    {/* 5% */}
                   </span>
                 </div>
                 <div className="text-3xl font-bold text-white mb-1">{studentData.githubContributions}</div>
@@ -1102,9 +1101,7 @@ const StudentProfile = () => {
                   <Award className="w-8 h-8 text-gray-400" />
                   <span className="text-green-400 text-sm font-medium flex items-center gap-1">
                     <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      {/* <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" /> */}
                     </svg>
-                    {/* 2% */}
                   </span>
                 </div>
                 <div className="text-3xl font-bold text-white mb-1">{studentData.attendanceRate}%</div>
@@ -1197,10 +1194,9 @@ const StudentProfile = () => {
                               e.preventDefault();
                               e.stopPropagation();
                               e.nativeEvent.stopImmediatePropagation();
-                            handleJoinLiveClass(classItem, e);
+                              handleJoinLiveClass(classItem, e);
                             }}
                             onMouseDown={(e) => {
-                              // Prevent any default behavior on mousedown
                               if (e.button === 0) {
                                 e.preventDefault();
                               }
@@ -1259,24 +1255,34 @@ const StudentProfile = () => {
                     Recent Recordings
                   </h2>
                   <div className="grid grid-cols-2 gap-4">
-                    {recordings.slice(0, 2).map((recording) => (
+                    {loadingRecordings ? (
+                      <div className="col-span-2 text-center text-gray-400 py-4">Loading...</div>
+                    ) : recordings.slice(0, 2).map((recording) => (
                       <div
                         key={recording.id}
+                        onClick={() => handlePlayRecording(recording)}
                         className="bg-[#0d1420] rounded-lg overflow-hidden border border-gray-800 hover:border-gray-700 transition-all cursor-pointer group"
                       >
                         <div className="relative">
-                          <img src={recording.thumbnail} alt={recording.title} className="w-full h-32 object-cover" />
+                          <img 
+                            src={recording.thumbnailUrl} 
+                            alt={recording.title} 
+                            className="w-full h-32 object-cover"
+                            onError={(e) => {
+                              e.currentTarget.src = 'https://images.pexels.com/photos/577585/pexels-photo-577585.jpeg?auto=compress&cs=tinysrgb&w=400';
+                            }}
+                          />
                           <div className="absolute inset-0 bg-black/60 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
                             <PlayCircle className="w-12 h-12 text-[#FFC540]" />
                           </div>
                           <span className="absolute bottom-2 right-2 px-2 py-1 bg-black/80 text-[#FFC540] text-xs font-semibold rounded">
-                            {recording.duration}
+                            {formatRecordingDuration(recording.duration)}
                           </span>
                         </div>
                         <div className="p-4">
                           <h3 className="text-white font-semibold mb-1 text-sm">{recording.title}</h3>
-                          <p className="text-gray-400 text-xs">{recording.mentor}</p>
-                          <p className="text-gray-500 text-xs mt-1">{recording.date}</p>
+                          <p className="text-gray-400 text-xs">Session #{recording.sessionId}</p>
+                          <p className="text-gray-500 text-xs mt-1">{formatRecordingDate(recording.recordedAt)}</p>
                         </div>
                       </div>
                     ))}
@@ -1528,41 +1534,71 @@ const StudentProfile = () => {
         {activeTab === 'recordings' && (
           <div className="bg-[#1a2332] rounded-xl p-6 border border-gray-800">
             <h2 className="text-xl font-bold text-white mb-6">Recorded Sessions</h2>
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {recordings.map((recording) => (
-                <div
-                  key={recording.id}
-                  className="bg-[#0d1420] rounded-lg overflow-hidden border border-gray-800 hover:border-gray-700 transition-all cursor-pointer group"
-                >
-                  <div className="relative">
-                    <img src={recording.thumbnail} alt={recording.title} className="w-full h-48 object-cover" />
-                    <div className="absolute inset-0 bg-black/60 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
-                      <PlayCircle className="w-16 h-16 text-[#FFC540]" />
+            
+            {loadingRecordings ? (
+              <div className="flex justify-center items-center h-64">
+                <div className="text-gray-400">Loading recordings...</div>
+              </div>
+            ) : recordingsError ? (
+              <div className="text-center py-12">
+                <AlertCircle className="w-16 h-16 text-red-400 mx-auto mb-4" />
+                <p className="text-red-400 mb-4">{recordingsError}</p>
+              </div>
+            ) : recordings.length === 0 ? (
+              <div className="text-center py-12">
+                <PlayCircle className="w-16 h-16 text-gray-600 mx-auto mb-4" />
+                <p className="text-gray-400">No recordings available yet</p>
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                {recordings.map((recording) => (
+                  <div
+                    key={recording.id}
+                    onClick={() => handlePlayRecording(recording)}
+                    className="bg-[#0d1420] rounded-lg overflow-hidden border border-gray-800 hover:border-gray-700 transition-all cursor-pointer group"
+                  >
+                    <div className="relative">
+                      <img 
+                        src={recording.thumbnailUrl} 
+                        alt={recording.title} 
+                        className="w-full h-48 object-cover"
+                        onError={(e) => {
+                          e.currentTarget.src = 'https://images.pexels.com/photos/577585/pexels-photo-577585.jpeg?auto=compress&cs=tinysrgb&w=400';
+                        }}
+                      />
+                      <div className="absolute inset-0 bg-black/60 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                        <PlayCircle className="w-16 h-16 text-[#FFC540]" />
+                      </div>
+                      <span className="absolute bottom-3 right-3 px-3 py-1 bg-black/90 text-[#FFC540] text-sm font-bold rounded">
+                        {formatRecordingDuration(recording.duration)}
+                      </span>
+                      {recording.status === 'FINISHED' && (
+                        <span className="absolute top-3 left-3 px-2 py-1 bg-green-600 text-white text-xs font-semibold rounded">
+                          Available
+                        </span>
+                      )}
                     </div>
-                    <span className="absolute bottom-3 right-3 px-3 py-1 bg-black/90 text-[#FFC540] text-sm font-bold rounded">
-                      {recording.duration}
-                    </span>
-                  </div>
-                  <div className="p-5">
-                    <h3 className="text-white font-bold text-base mb-2">{recording.title}</h3>
-                    <div className="space-y-1 text-sm">
-                      <p className="text-gray-400 flex items-center gap-2">
-                        <Users className="w-4 h-4" />
-                        {recording.mentor}
-                      </p>
-                      <p className="text-gray-400 flex items-center gap-2">
-                        <BookOpen className="w-4 h-4" />
-                        {recording.program}
-                      </p>
-                      <p className="text-gray-500 flex items-center gap-2">
-                        <Calendar className="w-4 h-4" />
-                        {recording.date}
-                      </p>
+                    <div className="p-5">
+                      <h3 className="text-white font-bold text-base mb-2">{recording.title}</h3>
+                      <div className="space-y-1 text-sm">
+                        <p className="text-gray-400 flex items-center gap-2">
+                          <BookOpen className="w-4 h-4" />
+                          Session #{recording.sessionId}
+                        </p>
+                        <p className="text-gray-400 flex items-center gap-2">
+                          <Users className="w-4 h-4" />
+                          Batch {recording.batchId}
+                        </p>
+                        <p className="text-gray-500 flex items-center gap-2">
+                          <Calendar className="w-4 h-4" />
+                          {formatRecordingDate(recording.recordedAt)}
+                        </p>
+                      </div>
                     </div>
                   </div>
-                </div>
-              ))}
-            </div>
+                ))}
+              </div>
+            )}
           </div>
         )}
 
