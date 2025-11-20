@@ -11,7 +11,7 @@ interface SessionStudent {
   batch_id: number;
   section_id: number;
   enrollment_date: string;
-  attendance_status: string;
+  attendance_status: string; // Updated with multimedia service data (50% threshold)
   has_feedback: boolean;
 }
 
@@ -61,9 +61,20 @@ const MentorStudents: React.FC = () => {
     console.log('User:', user);
     console.log('UserId:', userId);
     fetchSessions();
+    
+    // Refresh sessions every 30 seconds to get updated attendance data
+    // This ensures attendance marked by webhook (50% threshold) is reflected in UI
+    const refreshInterval = setInterval(() => {
+      fetchSessions();
+    }, 30000); // 30 seconds
+    
+    return () => {
+      clearInterval(refreshInterval);
+    };
   }, []);
 
   const fetchSessions = async () => {
+    if (!userId) return;
     try {
       setLoading(true);
       const response = await api.lms.adminSchedule.getFacultySessions(userId);
@@ -201,7 +212,7 @@ const MentorStudents: React.FC = () => {
       </div>
 
       {/* Feedback Modal */}
-      {feedbackModal.isOpen && (
+      {feedbackModal.isOpen && userId && (
         <StudentSelectionModal
           isOpen={feedbackModal.isOpen}
           sessionId={feedbackModal.sessionId}
@@ -263,6 +274,7 @@ const StudentSelectionModal: React.FC<StudentSelectionModalProps> = ({
   }, [isOpen, sessionId]);
 
   const fetchStudents = async () => {
+    if (!userId) return;
     try {
       setLoadingStudents(true);
       console.log('Fetching students for userId:', userId);
@@ -280,7 +292,40 @@ const StudentSelectionModal: React.FC<StudentSelectionModalProps> = ({
       
       if (currentSession && currentSession.students) {
         console.log('Setting students:', currentSession.students);
-        setSessionStudents(currentSession.students);
+        let studentsList = currentSession.students;
+        
+        // Fetch attendance data from multimedia service if sessionId and courseId are available
+        if (sessionId && currentSession.course_id) {
+          try {
+            const attendanceResponse = await api.multimedia.attendance.getCourseAttendance(
+              sessionId,
+              currentSession.course_id
+            );
+            
+            if (attendanceResponse && attendanceResponse.list) {
+              // Create a map of studentId -> attendance status from multimedia service
+              const attendanceMap = new Map();
+              attendanceResponse.list.forEach((student: any) => {
+                const isPresent = student.isPresent === '1' || student.isPresent === 1;
+                attendanceMap.set(student.studentUserId, isPresent ? 'present' : 'absent');
+              });
+              
+              // Update attendance_status with multimedia service data (50% threshold)
+              studentsList = studentsList.map((student: SessionStudent) => {
+                const updatedStatus = attendanceMap.get(student.student_id);
+                return {
+                  ...student,
+                  attendance_status: updatedStatus || student.attendance_status || 'unknown'
+                };
+              });
+            }
+          } catch (attendanceErr) {
+            console.error('Error fetching attendance:', attendanceErr);
+            // Continue without attendance data if API fails
+          }
+        }
+        
+        setSessionStudents(studentsList);
       } else {
         console.log('No students found for this session');
         setSessionStudents([]);
@@ -411,14 +456,27 @@ const StudentSelectionModal: React.FC<StudentSelectionModalProps> = ({
                       onClick={() => handleStudentSelect(student)}
                       className="bg-gray-700 rounded-lg p-4 cursor-pointer hover:bg-gray-600 transition-colors duration-200"
                     >
-                      <div className="flex items-center space-x-3">
-                        <div className="w-10 h-10 bg-[#FFC540] rounded-full flex items-center justify-center text-black font-bold">
-                          {student.student_name.charAt(0)}
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center space-x-3">
+                          <div className="w-10 h-10 bg-[#FFC540] rounded-full flex items-center justify-center text-black font-bold">
+                            {student.student_name.charAt(0)}
+                          </div>
+                          <div>
+                            <h5 className="font-medium text-white">{student.student_name}</h5>
+                            <p className="text-sm text-gray-400">{student.student_email || 'No email'}</p>
+                          </div>
                         </div>
-                        <div>
-                          <h5 className="font-medium text-white">{student.student_name}</h5>
-                          <p className="text-sm text-gray-400">{student.student_email || 'No email'}</p>
-                        </div>
+                        {student.attendance_status && student.attendance_status !== 'unknown' && (
+                          <div className="flex items-center space-x-2">
+                            <span className={`px-3 py-1 text-xs font-medium rounded-full ${
+                              student.attendance_status.toLowerCase() === 'present'
+                                ? 'bg-green-500/20 text-green-400'
+                                : 'bg-red-500/20 text-red-400'
+                            }`}>
+                              {student.attendance_status.charAt(0).toUpperCase() + student.attendance_status.slice(1)}
+                            </span>
+                          </div>
+                        )}
                       </div>
                     </div>
                   ))}

@@ -1122,6 +1122,18 @@ const multimediaApi = {
       }, token);
     },
 
+    getEndedSessions: async (token: string, batchId?: number, facultyId?: string, limit: number = 50, offset: number = 0) => {
+      const params = new URLSearchParams();
+      if (batchId) params.append('batchId', batchId.toString());
+      if (facultyId) params.append('facultyId', facultyId);
+      params.append('limit', limit.toString());
+      params.append('offset', offset.toString());
+      
+      return lmsApiRequest(`${MM_BASE_URL}/liveclass/session/ended?${params.toString()}`, {
+        method: 'GET',
+      }, token);
+    },
+
     getStats: async (token: string) => {
       return apiRequest(`${LMS_BASE_URL}/api/v1/session/stats`, {
         method: 'GET',
@@ -1269,6 +1281,50 @@ const multimediaApi = {
       return apiRequest(`${LMS_BASE_URL}/api/v1/reports/course`, {
         method: 'POST',
         body: JSON.stringify(filters),
+      }, token);
+    },
+  },
+
+  attendance: {
+    // Get session attendance from multimedia service
+    getSessionAttendance: async (sessionId: number, token: string, batchId?: number, courseId?: number, search?: string, limit: number = 20, offset: number = 0) => {
+      const params = new URLSearchParams();
+      if (sessionId) params.append('sessionId', sessionId.toString());
+      if (batchId) params.append('batchId', batchId.toString());
+      if (courseId) params.append('courseId', courseId.toString());
+      if (search) params.append('search', search);
+      params.append('limit', limit.toString());
+      params.append('offset', offset.toString());
+
+      // MM_BASE_URL already contains /mm/v3
+      return lmsApiRequest(`${MM_BASE_URL}/session/attendance?${params.toString()}`, {
+        method: 'GET',
+      }, token);
+    },
+
+    // Get course attendance from multimedia service
+    getCourseAttendance: async (sessionId: number | null, courseId: number, token: string, search?: string, limit: number = 20, offset: number = 0) => {
+      const params = new URLSearchParams();
+      params.append('entityId', courseId.toString());
+      if (sessionId) params.append('liveSessionId', sessionId.toString());
+      if (search) params.append('search', search);
+      params.append('limit', limit.toString());
+      params.append('offset', offset.toString());
+
+      // MM_BASE_URL already contains /mm/v3
+      return lmsApiRequest(`${MM_BASE_URL}/session/course/attendance?${params.toString()}`, {
+        method: 'GET',
+      }, token);
+    },
+
+    // Get session analytics from multimedia service (includes 50% threshold attendance)
+    getSessionAnalytics: async (sessionId: number, token: string) => {
+      const params = new URLSearchParams();
+      params.append('sessionId', sessionId.toString());
+
+      // MM_BASE_URL already contains /mm/v3, so we don't need to add it again
+      return lmsApiRequest(`${MM_BASE_URL}/session/analytics?${params.toString()}`, {
+        method: 'GET',
       }, token);
     },
   },
@@ -1468,6 +1524,8 @@ export const useApi = () => {
     multimedia: {
       sessions: {
         getAll: () => multimediaApi.sessions.getAll(token),
+        getEndedSessions: (batchId?: number, facultyId?: string, limit?: number, offset?: number) =>
+          multimediaApi.sessions.getEndedSessions(token, batchId, facultyId, limit || 50, offset || 0),
         getStats: () => multimediaApi.sessions.getStats(token),
         getUpcoming: () => multimediaApi.sessions.getUpcoming(token),
         startSession: (sessionId: number, facultyId: string, batchId: number, facultyName: string) =>
@@ -1481,6 +1539,14 @@ export const useApi = () => {
         getAttendanceReport: (filters: any) => multimediaApi.reports.getAttendanceReport(filters, token),
         getSessionReport: (filters: any) => multimediaApi.reports.getSessionReport(filters, token),
         getCourseReport: (filters: any) => multimediaApi.reports.getCourseReport(filters, token),
+      },
+      attendance: {
+        getSessionAttendance: (sessionId: number, batchId?: number, courseId?: number, search?: string, limit?: number, offset?: number) =>
+          multimediaApi.attendance.getSessionAttendance(sessionId, token, batchId, courseId, search, limit || 20, offset || 0),
+        getCourseAttendance: (sessionId: number | null, courseId: number, search?: string, limit?: number, offset?: number) =>
+          multimediaApi.attendance.getCourseAttendance(sessionId, courseId, token, search, limit || 20, offset || 0),
+        getSessionAnalytics: (sessionId: number) =>
+          multimediaApi.attendance.getSessionAnalytics(sessionId, token),
       },
     },
     dashboard: {
