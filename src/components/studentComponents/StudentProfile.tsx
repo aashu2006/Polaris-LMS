@@ -3,6 +3,7 @@ import { Calendar, Video, FileText, Github, Award, Clock, Users, BookOpen, PlayC
 
 import { useApi } from '../../services/api';
 import { useAuth } from '../../contexts/AuthContext';
+import VideoPlayerModal from './VideoPlayerModal';
 
 interface UpcomingClass {
   id: string;
@@ -196,6 +197,10 @@ const StudentProfile = () => {
     return 'pending';
   };
 
+  // Add after other state declarations
+  const [showVideoPlayer, setShowVideoPlayer] = useState(false);
+  const [selectedRecording, setSelectedRecording] = useState<Recording | null>(null);
+
   const mapAssignmentFromApi = (item: any): StudentAssignmentListItem => {
     const assignmentData = item?.assignments || {};
     const status = normalizeAssignmentStatus(item?.status, item?.obtained_marks);
@@ -264,9 +269,14 @@ const StudentProfile = () => {
     });
   };
 
+  // const handlePlayRecording = (recording: Recording) => {
+  //   const playlistUrl = `https://prod-video-transcoding.polariscampus.com/v1/vod/sessions/${recording.sessionId}/master-playlist`;
+  //   window.open(playlistUrl, '_blank');
+  // };
+
   const handlePlayRecording = (recording: Recording) => {
-    const playlistUrl = `https://prod-video-transcoding.polariscampus.com/v1/vod/sessions/${recording.sessionId}/master-playlist`;
-    window.open(playlistUrl, '_blank');
+    setSelectedRecording(recording);
+    setShowVideoPlayer(true);
   };
 
   const getAssignmentStatusMeta = (status: StudentAssignmentListItem['status']) => {
@@ -1265,11 +1275,11 @@ const StudentProfile = () => {
                       >
                         <div className="relative">
                           <img 
-                            src={recording.thumbnailUrl} 
+                            src="https://media.istockphoto.com/id/1193698730/video/mans-hands-coding-on-laptop-close-up-man-using-portable-computers-man-programmer-writes-code.jpg?s=640x640&k=20&c=QUvOTUEJBXa889HtXbzIQY0dZBXY_jEjEvbJU3seEcI="
                             alt={recording.title} 
                             className="w-full h-32 object-cover"
                             onError={(e) => {
-                              e.currentTarget.src = 'https://images.pexels.com/photos/577585/pexels-photo-577585.jpeg?auto=compress&cs=tinysrgb&w=400';
+                              e.currentTarget.src = 'src="https://media.istockphoto.com/id/1193698730/video/mans-hands-coding-on-laptop-close-up-man-using-portable-computers-man-programmer-writes-code.jpg?s=640x640&k=20&c=QUvOTUEJBXa889HtXbzIQY0dZBXY_jEjEvbJU3seEcI=';
                             }}
                           />
                           <div className="absolute inset-0 bg-black/60 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
@@ -1563,7 +1573,7 @@ const StudentProfile = () => {
                         alt={recording.title} 
                         className="w-full h-48 object-cover"
                         onError={(e) => {
-                          e.currentTarget.src = 'https://images.pexels.com/photos/577585/pexels-photo-577585.jpeg?auto=compress&cs=tinysrgb&w=400';
+                          e.currentTarget.src = 'https://media.istockphoto.com/id/1193698730/video/mans-hands-coding-on-laptop-close-up-man-using-portable-computers-man-programmer-writes-code.jpg?s=640x640&k=20&c=QUvOTUEJBXa889HtXbzIQY0dZBXY_jEjEvbJU3seEcI=';
                         }}
                       />
                       <div className="absolute inset-0 bg-black/60 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
@@ -2107,6 +2117,18 @@ const StudentProfile = () => {
           </div>
         </div>
       )}
+      {/* Video Player Modal */}
+        {showVideoPlayer && selectedRecording && (
+          <VideoPlayerModal
+            isOpen={showVideoPlayer}
+            onClose={() => {
+              setShowVideoPlayer(false);
+              setSelectedRecording(null);
+            }}
+            videoUrl={`https://prod-video-transcoding.polariscampus.com/v1/vod/sessions/${selectedRecording.sessionId}/master-playlist`}
+            title={selectedRecording.title}
+          />
+        )}
     </div>
   );
 };
