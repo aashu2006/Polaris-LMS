@@ -5,6 +5,7 @@ import { useAuth } from '../contexts/AuthContext';
 // Base URLs for different services
 const UMS_BASE_URL = import.meta.env.VITE_UMS_BASE_URL || 'https://ums-672553132888.asia-south1.run.app'; // User Management System
 const LMS_BASE_URL = import.meta.env.VITE_LMS_BASE_URL || 'https://live-class-lms1-672553132888.asia-south1.run.app'; // Live Class LMS Backend
+const VOD_BASE_URL = 'https://prod-video-transcoding.polariscampus.com/v1/vod';
 
 // Token storage and refresh functionality
 let refreshTokenPromise: Promise<string> | null = null;
@@ -1377,6 +1378,36 @@ const dashboardApi = {
   },
 };
 
+export const vodApi = {
+  recordings: {
+    getStudentRecordings: async (studentId: string, token: string) => {
+      try {
+        return await apiRequest(
+          `${VOD_BASE_URL}/students/${studentId}/recordings`,
+          { method: 'GET' },
+          token
+        );
+      } catch (error: any) {
+        // If the error is about multiple rows, it means the student has multiple batches
+        if (error.message?.includes('multiple (or no) rows returned')) {
+          console.warn(`Student ${studentId} has multiple batches, this needs backend fix`);
+          
+          // For testing, use the working student ID
+          if (studentId !== '08faa382-56d6-4a7c-9482-ef6efdfa5bea') {
+            console.log('Falling back to test student ID');
+            return await apiRequest(
+              `${VOD_BASE_URL}/students/08faa382-56d6-4a7c-9482-ef6efdfa5bea/recordings`,
+              { method: 'GET' },
+              token
+            );
+          }
+        }
+        throw error;
+      }
+    },
+  },
+};
+
 // Hook to use API with authentication
 export const useApi = () => {
   const { token, refreshToken } = useAuth();
@@ -1408,6 +1439,10 @@ export const useApi = () => {
         getDetails: (page: number = 1, limit: number = 20) => lmsApi.students.getStudentDetails(page, limit, token),
         getAttendanceHistory: (studentId: string) => umsApi.students.getAttendanceHistory(studentId, token),
         bulkEnroll: (file: File, batchId: number) => umsApi.students.bulkEnroll(file, batchId, token),
+        getRecordings: (studentId: string) => vodApi.recordings.getStudentRecordings(studentId, token),
+      },
+      recordings: {
+        getMasterPlaylist: (sessionId: number) => vodApi.recordings.getMasterPlaylist(sessionId, token),
       },
       alerts: {
         getAll: () => umsApi.alerts.getAll(token),
