@@ -197,7 +197,6 @@ const StudentProfile = () => {
     return 'pending';
   };
 
-  // Add after other state declarations
   const [showVideoPlayer, setShowVideoPlayer] = useState(false);
   const [selectedRecording, setSelectedRecording] = useState<Recording | null>(null);
 
@@ -269,11 +268,6 @@ const StudentProfile = () => {
     });
   };
 
-  // const handlePlayRecording = (recording: Recording) => {
-  //   const playlistUrl = `https://prod-video-transcoding.polariscampus.com/v1/vod/sessions/${recording.sessionId}/master-playlist`;
-  //   window.open(playlistUrl, '_blank');
-  // };
-
   const handlePlayRecording = (recording: Recording) => {
     setSelectedRecording(recording);
     setShowVideoPlayer(true);
@@ -340,13 +334,7 @@ const StudentProfile = () => {
           setLoadingRecordings(true);
           setRecordingsError(null);
           
-          // Use the working student ID as fallback for testing
-          const testStudentId = '08faa382-56d6-4a7c-9482-ef6efdfa5bea';
-          const studentIdToUse = user.id || testStudentId;
-          
-          console.log('Fetching recordings for student:', studentIdToUse);
-          
-          const response: RecordingsResponse = await api.ums.students.getRecordings(studentIdToUse);
+          const response: RecordingsResponse = await api.ums.students.getRecordings(user.id);
           
           if (response.status === 'success' && response.data.recordings) {
             setRecordings(response.data.recordings);
@@ -354,9 +342,6 @@ const StudentProfile = () => {
             setRecordingsError('Failed to fetch recordings');
           }
         } catch (err: any) {
-          console.error('Error fetching recordings:', err);
-          
-          // Show user-friendly error message
           if (err?.message?.includes('multiple (or no) rows returned')) {
             setRecordingsError('This student has multiple batches. Please contact support.');
           } else if (err?.message?.includes('500')) {
@@ -667,7 +652,6 @@ const StudentProfile = () => {
           }
 
           try {
-            // Status check logic commented out
           } catch (statusError) {
             const responseStatus = (statusError as any)?.response?.status ?? (statusError as any)?.status;
             if (responseStatus === 404 || responseStatus === 400 || responseStatus === 410) {
@@ -747,6 +731,38 @@ const StudentProfile = () => {
   const goNextUpcoming = () => setUpcomingPage(p => Math.min(upcomingTotalPages, p + 1));
   const goPrevSchedule = () => setSchedulePage(p => Math.max(1, p - 1));
   const goNextSchedule = () => setSchedulePage(p => Math.min(scheduleTotalPages, p + 1));
+
+  const handleAddToCalendar = (classItem: UpcomingClass, e?: React.MouseEvent<HTMLButtonElement>) => {
+    if (e) {
+      e.preventDefault();
+      e.stopPropagation();
+    }
+
+    if (!classItem.epoch || classItem.epoch <= Date.now()) {
+      return;
+    }
+
+    // Create calendar event
+    const startDate = new Date(classItem.epoch);
+    const duration = parseInt(classItem.duration?.replace(' min', '') || '60');
+    const endDate = new Date(startDate.getTime() + duration * 60000);
+
+    const formatDate = (date: Date) => {
+      return date.toISOString().replace(/[-:]/g, '').split('.')[0] + 'Z';
+    };
+
+    const title = encodeURIComponent(classItem.title || 'Live Class');
+    const description = encodeURIComponent(
+      `${classItem.program || ''}${classItem.mentor ? ` - ${classItem.mentor}` : ''}`
+    );
+    const location = encodeURIComponent('Online');
+    const startDateStr = formatDate(startDate);
+    const endDateStr = formatDate(endDate);
+
+    const googleCalendarUrl = `https://calendar.google.com/calendar/render?action=TEMPLATE&text=${title}&dates=${startDateStr}/${endDateStr}&details=${description}&location=${location}`;
+
+    window.open(googleCalendarUrl, '_blank', 'noopener,noreferrer');
+  };
 
   const handleJoinLiveClass = async (classItem: UpcomingClass, e?: React.MouseEvent<HTMLButtonElement>) => {
     if (e) {
@@ -1204,7 +1220,11 @@ const StudentProfile = () => {
                               e.preventDefault();
                               e.stopPropagation();
                               e.nativeEvent.stopImmediatePropagation();
-                              handleJoinLiveClass(classItem, e);
+                              if (classItem.status === 'live') {
+                                handleJoinLiveClass(classItem, e);
+                              } else if (classItem.epoch && classItem.epoch > Date.now()) {
+                                handleAddToCalendar(classItem, e);
+                              }
                             }}
                             onMouseDown={(e) => {
                               if (e.button === 0) {
@@ -1212,8 +1232,8 @@ const StudentProfile = () => {
                               }
                             }}
                             className="ml-4 px-4 py-2 bg-[#FFC540] text-black rounded-lg font-semibold hover:bg-[#FFC540] transition-all flex items-center gap-2 text-sm disabled:opacity-40 disabled:cursor-not-allowed"
-                            disabled={classItem.status !== 'live' || isJoiningSession}
-                            aria-disabled={classItem.status !== 'live' || isJoiningSession}
+                            disabled={(classItem.status === 'live' && isJoiningSession) || (classItem.status !== 'live' && (!classItem.epoch || classItem.epoch <= Date.now()))}
+                            aria-disabled={(classItem.status === 'live' && isJoiningSession) || (classItem.status !== 'live' && (!classItem.epoch || classItem.epoch <= Date.now()))}
                           >
                             {classItem.status === 'live' ? (
                               <>
@@ -1299,128 +1319,6 @@ const StudentProfile = () => {
                   </div>
                 </div>
               </div>
-
-              {/* <div className="space-y-6">
-                <div className="bg-[#1a2332] rounded-xl p-6 border border-gray-800">
-                  <h2 className="text-xl font-bold text-white flex items-center gap-2 mb-6">
-                    <Users className="w-5 h-5" />
-                    Mentor Info
-                  </h2>
-                  <div className="flex flex-col items-center text-center">
-                    <img
-                      src={mentorInfo.photo}
-                      alt={mentorInfo.name}
-                      className="w-24 h-24 rounded-full object-cover mb-4 border-4 border-[#FFC540]/20"
-                    />
-                    <h3 className="text-lg font-bold text-white mb-1">{mentorInfo.name}</h3>
-                    <div className="flex items-center gap-1 text-gray-400 text-sm mb-4">
-                      <Briefcase className="w-3 h-3" />
-                      {mentorInfo.department}
-                    </div>
-                    <p className="text-gray-400 text-sm mb-4 leading-relaxed">
-                      {mentorInfo.bio}
-                    </p>
-                    <div className="w-full space-y-2 mb-4">
-                      <div className="flex items-center gap-2 text-sm text-gray-300 bg-[#0d1420] rounded-lg p-3">
-                        <Mail className="w-4 h-4 text-[#FFC540]" />
-                        <span className="text-xs break-all">{mentorInfo.email}</span>
-                      </div>
-                      <div className="flex items-center gap-2 text-sm text-gray-300 bg-[#0d1420] rounded-lg p-3">
-                        <Phone className="w-4 h-4 text-[#FFC540]" />
-                        <span className="text-xs">{mentorInfo.phone}</span>
-                      </div>
-                    </div>
-                    <button className="w-full px-4 py-3 bg-[#FFC540] text-black rounded-lg font-semibold hover:bg-[#FFC540] transition-all flex items-center justify-center gap-2">
-                      <Mail className="w-4 h-4" />
-                      Contact Mentor
-                    </button>
-                  </div>
-                </div>
-
-                <div className="bg-[#1a2332] rounded-xl p-6 border border-gray-800">
-                  <h2 className="text-xl font-bold text-white flex items-center gap-2 mb-6">
-                    <FileText className="w-5 h-5" />
-                    Assignments
-                  </h2>
-                  <div className="space-y-3">
-                    {loadingAssignments && (
-                      <div className="text-gray-400 text-sm">Loading assignments...</div>
-                    )}
-                    {!loadingAssignments && assignmentsError && (
-                      <div className="text-red-400 text-sm">{assignmentsError}</div>
-                    )}
-                    {!loadingAssignments && !assignmentsError && assignments.length === 0 && (
-                      <div className="text-gray-400 text-sm">No assignments yet.</div>
-                    )}
-                    {!loadingAssignments && !assignmentsError && assignments.slice(0, 3).map((assignment) => (
-                      <div
-                        key={assignment.studentAssignmentId || assignment.assignmentId}
-                        className="bg-[#0d1420] rounded-lg p-4 border border-gray-800 hover:border-gray-700 transition-all"
-                      >
-                        <div className="flex items-start justify-between">
-                          <div>
-                            <div className="flex items-center gap-2 mb-2">
-                              <h3 className="text-white font-medium text-sm">{assignment.title}</h3>
-                              {renderStatusBadge(assignment.status)}
-                              {assignment.gradeLabel && assignment.status === 'graded' && (
-                                <span className="px-2 py-1 bg-green-500/20 text-green-300 rounded-full text-xs font-semibold">
-                                  Grade: {assignment.gradeLabel}
-                                </span>
-                              )}
-                            </div>
-                            <div className="flex flex-col text-xs text-gray-400 gap-1">
-                              <span>Program: {assignment.program}</span>
-                              {assignment.dueDate && <span>Due: {formatDate(assignment.dueDate)}</span>}
-                            </div>
-                          </div>
-                          <button
-                            onClick={() => openAssignmentDetail(assignment)}
-                            className="ml-4 px-4 py-2 bg-[#FFC540] text-black rounded-lg font-semibold hover:bg-[#FFC540] transition-all text-xs"
-                          >
-                            {assignment.status === 'pending' ? 'Submit' : 'Details'}
-                          </button>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-
-                <div className="bg-[#1a2332] rounded-xl p-6 border border-gray-800">
-                  <h2 className="text-xl font-bold text-white flex items-center gap-2 mb-6">
-                    <Award className="w-5 h-5" />
-                    Performance
-                  </h2>
-                  <div className="space-y-4">
-                    <div>
-                      <div className="flex justify-between text-sm mb-2">
-                        <span className="text-gray-400">Attendance Rate</span>
-                        <span className="text-white font-semibold">{studentData.attendanceRate}%</span>
-                      </div>
-                      <div className="w-full bg-gray-700 rounded-full h-2">
-                        <div
-                          className="bg-[#FFC540] h-2 rounded-full"
-                          style={{ width: `${studentData.attendanceRate}%` }}
-                        ></div>
-                      </div>
-                    </div>
-                    <div>
-                      <div className="flex justify-between text-sm mb-2">
-                        <span className="text-gray-400">Assignments Completed</span>
-                        <span className="text-white font-semibold">
-                          {studentData.completedAssignments}/{studentData.totalAssignments}
-                        </span>
-                      </div>
-                      <div className="w-full bg-gray-700 rounded-full h-2">
-                        <div
-                          className="bg-[#FFC540] h-2 rounded-full"
-                          style={{ width: `${(studentData.completedAssignments / studentData.totalAssignments) * 100}%` }}
-                        ></div>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </div> */}
-
             </div>
           </div>
         )}
@@ -1485,17 +1383,18 @@ const StudentProfile = () => {
                         e.nativeEvent.stopImmediatePropagation();
                         if (classItem.status === 'live' && !isJoiningSession) {
                           handleJoinLiveClass(classItem, e);
+                        } else if (classItem.status !== 'live' && classItem.epoch && classItem.epoch > Date.now()) {
+                          handleAddToCalendar(classItem, e);
                         }
                       }}
                       onMouseDown={(e) => {
-                        // Prevent any default behavior on mousedown
                         if (e.button === 0) {
                           e.preventDefault();
                         }
                       }}
                       className="ml-6 px-6 py-3 bg-[#FFC540] text-black rounded-lg font-bold hover:bg-[#FFC540] transition-all flex items-center gap-2 disabled:opacity-40 disabled:cursor-not-allowed"
-                      disabled={classItem.status !== 'live' || isJoiningSession}
-                      aria-disabled={classItem.status !== 'live' || isJoiningSession}
+                      disabled={(classItem.status === 'live' && isJoiningSession) || (classItem.status !== 'live' && (!classItem.epoch || classItem.epoch <= Date.now()))}
+                      aria-disabled={(classItem.status === 'live' && isJoiningSession) || (classItem.status !== 'live' && (!classItem.epoch || classItem.epoch <= Date.now()))}
                     >
                       {classItem.status === 'live' ? (
                         <>
@@ -1702,67 +1601,6 @@ const StudentProfile = () => {
 
         {activeTab === 'contributions' && (
           <div className="space-y-6">
-            {/* <div className="bg-[#1a2332] rounded-xl p-6 border border-gray-800">
-              <div className="flex items-center justify-between mb-6">
-                <h2 className="text-xl font-bold text-white flex items-center gap-2">
-                  <Upload className="w-6 h-6" />
-                  My Uploads
-                </h2>
-                <button
-                  onClick={() => setShowUploadModal(true)}
-                  className="px-6 py-2 bg-[#FFC540] text-black rounded-lg font-bold hover:bg-[#FFC540] transition-all flex items-center gap-2 text-sm"
-                >
-                  <Upload className="w-4 h-4" />
-                  Upload File
-                </button>
-              </div>
-              <div className="space-y-4">
-                {uploadedFiles.map((file) => (
-                  <div
-                    key={file.id}
-                    className="bg-[#0d1420] rounded-lg p-6 border border-gray-800 hover:border-gray-700 transition-all"
-                  >
-                    <div className="flex items-start justify-between">
-                      <div className="flex items-start gap-4 flex-1">
-                        <div className="w-12 h-12 rounded-lg bg-[#FFC540]/20 flex items-center justify-center flex-shrink-0">
-                          <File className="w-6 h-6 text-[#FFC540]" />
-                        </div>
-                        <div className="flex-1">
-                          <h3 className="text-base font-semibold text-white mb-2">{file.name}</h3>
-                          <div className="flex items-center gap-6 text-gray-400 text-sm">
-                            <span className="flex items-center gap-2">
-                              <FileText className="w-4 h-4" />
-                              {file.type}
-                            </span>
-                            <span className="flex items-center gap-2">
-                              <BookOpen className="w-4 h-4" />
-                              {file.program}
-                            </span>
-                            <span>{file.size}</span>
-                            <span className="flex items-center gap-2">
-                              <Calendar className="w-4 h-4" />
-                              {file.uploadedDate}
-                            </span>
-                          </div>
-                        </div>
-                      </div>
-                      <div className="flex items-center gap-2 ml-4">
-                        <button className="px-4 py-2 bg-[#1a2332] text-white border border-gray-700 rounded-lg font-semibold hover:bg-[#243044] transition-all text-sm">
-                          Download
-                        </button>
-                        <button
-                          onClick={() => handleDeleteFile(file.id)}
-                          className="p-2 text-red-400 hover:text-red-300 hover:bg-red-500/10 rounded-lg transition-all"
-                        >
-                          <X className="w-4 h-4" />
-                        </button>
-                      </div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div> */}
-
             <div className="bg-[#1a2332] rounded-xl p-6 border border-gray-800">
               <div className="flex items-center justify-between mb-6">
                 <h2 className="text-xl font-bold text-white flex items-center gap-2">
