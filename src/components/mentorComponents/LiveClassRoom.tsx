@@ -50,7 +50,7 @@ const LiveClassRoom: React.FC<LiveClassRoomProps> = ({ sessionData, onClose }) =
   const [connectionEstablished, setConnectionEstablished] = useState(false)
   const [showParticipants, setShowParticipants] = useState(false)
   const visiblePeers = useMemo(
-    () => peers.filter(peer => !peer.isAuxiliary),
+    () => peers.filter(peer => !peer.isAuxiliary && !peer.name?.toLowerCase().includes('beam')),
     [peers]
   )
 
@@ -61,12 +61,11 @@ const LiveClassRoom: React.FC<LiveClassRoomProps> = ({ sessionData, onClose }) =
   const isConnectedRef = useRef(false)
   const uiFallbackRef = useRef<NodeJS.Timeout | null>(null)
 
-  // Monitor connection state and hide loading when connected
   useEffect(() => {
     isConnectedRef.current = isConnected || false
-    
+
     const actuallyConnected = isConnected || connectionEstablished || peers.length > 0
-    
+
     if (actuallyConnected && isJoining) {
       if (connectionTimeoutRef.current) {
         clearTimeout(connectionTimeoutRef.current)
@@ -83,14 +82,13 @@ const LiveClassRoom: React.FC<LiveClassRoomProps> = ({ sessionData, onClose }) =
       setIsJoining(false)
     }
   }, [isConnected, isJoining, connectionEstablished, peers.length, peers])
-  
+
   useEffect(() => {
     if (peers.length > 0 && isJoining && !connectionEstablished) {
       setConnectionEstablished(true)
     }
   }, [peers.length, isJoining, connectionEstablished])
 
-  // Join room when session data is available
   useEffect(() => {
     if (sessionData?.hms?.authToken && !joinAttemptedRef.current) {
       joinAttemptedRef.current = true
@@ -119,7 +117,7 @@ const LiveClassRoom: React.FC<LiveClassRoomProps> = ({ sessionData, onClose }) =
       const maxChecks = 5
       checkIntervalRef.current = setInterval(() => {
         checkCount++
-        
+
         if (checkCount >= maxChecks) {
           if (checkIntervalRef.current) {
             clearInterval(checkIntervalRef.current)
@@ -131,7 +129,7 @@ const LiveClassRoom: React.FC<LiveClassRoomProps> = ({ sessionData, onClose }) =
           }
         }
       }, 2000)
-      
+
       fallbackCheckRef.current = setTimeout(() => {
         if (checkIntervalRef.current) {
           clearInterval(checkIntervalRef.current)
@@ -139,7 +137,7 @@ const LiveClassRoom: React.FC<LiveClassRoomProps> = ({ sessionData, onClose }) =
         }
         fallbackCheckRef.current = null
       }, 10000)
-      
+
       connectionTimeoutRef.current = setTimeout(() => {
         if (!isConnectedRef.current && !isConnected && !connectionEstablished && peers.length === 0) {
           console.error('❌ Connection timeout - failed to connect within 30 seconds')
@@ -154,7 +152,7 @@ const LiveClassRoom: React.FC<LiveClassRoomProps> = ({ sessionData, onClose }) =
         authToken: authToken,
         userName: sessionData?.batchName || 'Tutor'
       })
-      
+
       if (uiFallbackRef.current) {
         clearTimeout(uiFallbackRef.current)
       }
@@ -165,7 +163,7 @@ const LiveClassRoom: React.FC<LiveClassRoomProps> = ({ sessionData, onClose }) =
       }, 12000)
     } catch (err: any) {
       console.error('❌ Error joining room:', err)
-      
+
       if (connectionTimeoutRef.current) {
         clearTimeout(connectionTimeoutRef.current)
         connectionTimeoutRef.current = null
@@ -178,7 +176,7 @@ const LiveClassRoom: React.FC<LiveClassRoomProps> = ({ sessionData, onClose }) =
         clearInterval(checkIntervalRef.current)
         checkIntervalRef.current = null
       }
-      
+
       setError(err.message || 'Failed to join room. Please try again.')
       setIsJoining(false)
     }
@@ -201,7 +199,6 @@ const LiveClassRoom: React.FC<LiveClassRoomProps> = ({ sessionData, onClose }) =
           setIsJoining(false)
         }
       } catch (_) {
-        // best-effort only
       }
     }
     checkPermissions()
@@ -245,10 +242,17 @@ const LiveClassRoom: React.FC<LiveClassRoomProps> = ({ sessionData, onClose }) =
 
   const leaveRoom = async () => {
     if (isLeaving) return
-    
+
     setIsLeaving(true)
-    
+
     try {
+      try {
+        await hmsActions.endRoom('Session ended by mentor', true)
+        console.log('✅ Room ended for all participants')
+      } catch (endRoomErr: any) {
+        console.warn('⚠️ Could not end room via HMS (may not have permission):', endRoomErr?.message)
+      }
+
       await api.multimedia.sessions.endSession(sessionData.sessionId, sessionData.facultyId)
     } catch (err: any) {
       console.error('❌ Error ending Multimedia session:', err.response?.data?.message || err.message)
@@ -259,7 +263,7 @@ const LiveClassRoom: React.FC<LiveClassRoomProps> = ({ sessionData, onClose }) =
     } catch (markErr: any) {
       console.error('⚠️ Failed to mark session complete in LMS:', markErr?.response?.data?.message || markErr?.message)
     }
-    
+
     await hmsActions.leave()
     onClose({ sessionId: sessionData.sessionId })
   }
@@ -324,11 +328,16 @@ const LiveClassRoom: React.FC<LiveClassRoomProps> = ({ sessionData, onClose }) =
                 />
                 <div className="peer-info">
                   <span className="peer-name">{peer.name}</span>
-                  {!peer.audioTrack && (
-                    <span className="muted-indicator">
-                      <MicOff size={18} />
+                  <div className="track-debug">
+                    <span className="icon-label">
+                      {peer.audioTrack && (peer.audioTrack.enabled === undefined || peer.audioTrack.enabled !== false) ? <Mic size={14} /> : <MicOff size={14} />}
+                      <span>{peer.audioTrack && (peer.audioTrack.enabled === undefined || peer.audioTrack.enabled !== false) ? 'On' : 'Muted'}</span>
                     </span>
-                  )}
+                    <span className="icon-label">
+                      {peer.videoTrack && (peer.videoTrack.enabled === undefined || peer.videoTrack.enabled !== false) ? <Video size={14} /> : <VideoOff size={14} />}
+                      <span>{peer.videoTrack && (peer.videoTrack.enabled === undefined || peer.videoTrack.enabled !== false) ? 'On' : 'Off'}</span>
+                    </span>
+                  </div>
                 </div>
               </div>
             ))}
@@ -365,8 +374,8 @@ const LiveClassRoom: React.FC<LiveClassRoomProps> = ({ sessionData, onClose }) =
           <Users size={24} />
         </button>
 
-        <button 
-          onClick={leaveRoom} 
+        <button
+          onClick={leaveRoom}
           className="control-btn leave-btn"
           disabled={isLeaving}
         >
@@ -407,12 +416,12 @@ const LiveClassRoom: React.FC<LiveClassRoomProps> = ({ sessionData, onClose }) =
                   </span>
                   <span className="participant-status">
                     <span className="icon-label">
-                      {peer.audioTrack ? <Mic size={14} /> : <MicOff size={14} />}
-                      <span>{peer.audioTrack ? 'On' : 'Muted'}</span>
+                      {peer.audioTrack && (peer.audioTrack.enabled === undefined || peer.audioTrack.enabled !== false) ? <Mic size={14} /> : <MicOff size={14} />}
+                      <span>{peer.audioTrack && (peer.audioTrack.enabled === undefined || peer.audioTrack.enabled !== false) ? 'On' : 'Muted'}</span>
                     </span>
                     <span className="icon-label">
-                      {peer.videoTrack ? <Video size={14} /> : <VideoOff size={14} />}
-                      <span>{peer.videoTrack ? 'On' : 'Off'}</span>
+                      {peer.videoTrack && (peer.videoTrack.enabled === undefined || peer.videoTrack.enabled !== false) ? <Video size={14} /> : <VideoOff size={14} />}
+                      <span>{peer.videoTrack && (peer.videoTrack.enabled === undefined || peer.videoTrack.enabled !== false) ? 'On' : 'Off'}</span>
                     </span>
                   </span>
                 </li>

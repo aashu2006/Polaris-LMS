@@ -108,7 +108,6 @@ async function refreshAccessToken(refreshToken: string): Promise<string> {
         throw new Error('No access token received from refresh endpoint');
       }
 
-      // Update stored tokens
       localStorage.setItem('accessToken', newAccessToken);
       if (newRefreshToken) {
         localStorage.setItem('refreshToken', newRefreshToken);
@@ -153,11 +152,9 @@ async function lmsApiRequest(url: string, options: RequestInit = {}, token?: str
       headers,
     });
 
-    // Read response as text first, then parse as JSON if possible
     const responseText = await response.text();
     let data;
 
-    // Try to parse as JSON
     try {
       data = responseText ? JSON.parse(responseText) : {};
     } catch (jsonError) {
@@ -216,7 +213,6 @@ async function apiRequest(url: string, options: RequestInit = {}, token?: string
     if (refreshToken) {
       try {
         const newToken = await refreshAccessToken(refreshToken);
-        // Retry the original request with new token
         headers['Authorization'] = `Bearer ${newToken}`;
         headers['x-access-token'] = newToken; // Keep for backward compatibility
         const retryResponse = await fetch(url, {
@@ -1388,11 +1384,9 @@ export const vodApi = {
           token
         );
       } catch (error: any) {
-        // If the error is about multiple rows, it means the student has multiple batches
         if (error.message?.includes('multiple (or no) rows returned')) {
           console.warn(`Student ${studentId} has multiple batches, this needs backend fix`);
           
-          // For testing, use the working student ID
           if (studentId !== '08faa382-56d6-4a7c-9482-ef6efdfa5bea') {
             console.log('Falling back to test student ID');
             return await apiRequest(
@@ -1404,6 +1398,13 @@ export const vodApi = {
         }
         throw error;
       }
+    },
+    getMasterPlaylist: async (sessionId: number, token: string) => {
+      return await apiRequest(
+        `${VOD_BASE_URL}/sessions/${sessionId}/master-playlist`,
+        { method: 'GET' },
+        token
+      );
     },
   },
 };
