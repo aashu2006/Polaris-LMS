@@ -123,7 +123,7 @@ interface UploadedFile {
 const StudentProfile = () => {
   const api = useApi();
   const { user, logout } = useAuth();
-  const [userBatchId, setUserBatchId] = useState<number | null>(null);
+  const [userBatchId, setUserBatchId] = useState<number | null>(user?.batchId || null);
   const [showUserDropdown, setShowUserDropdown] = useState(false);
   const [activeTab, setActiveTab] = useState<'overview' | 'schedule' | 'recordings' | 'assignments' | 'contributions'>('overview');
   const [showUploadModal, setShowUploadModal] = useState(false);
@@ -196,18 +196,16 @@ const StudentProfile = () => {
   const [selectedRecording, setSelectedRecording] = useState<Recording | null>(null);
 
   useEffect(() => {
-    const fetchUserProfile = async () => {
-      try {
-        const profile = await api.ums.getUserProfile();
-        if (profile?.data?.batchId) {
-          setUserBatchId(profile.data.batchId);
-        }
-      } catch (error) {
-        console.error('Error fetching user profile:', error);
-      }
-    };
-    fetchUserProfile();
-  }, [api.ums]);
+    if (user?.batchId) {
+      setUserBatchId(user.batchId);
+      return;
+    }
+
+    // NOTE: The profile endpoint is returning 404. We are relying on user.batchId from the token.
+    if (!user?.batchId) {
+      console.warn('Batch ID missing from user token. Batch exclusion filtering may not work correctly.');
+    }
+  }, [api.ums, user?.batchId]);
 
   const mapAssignmentFromApi = (item: any): StudentAssignmentListItem => {
     const assignmentData = item?.assignments || {};
