@@ -6,7 +6,7 @@ import { useAuth } from '../../contexts/AuthContext';
 const MentorSchedule: React.FC = () => {
   const api = useApi();
   const { user, token } = useAuth();
-  const [selectedDate, setSelectedDate] = useState(new Date());
+  const [selectedDate, _setSelectedDate] = useState(new Date());
   const [viewMode, setViewMode] = useState<'week' | 'month'>('week');
   const [rescheduleModal, setRescheduleModal] = useState<{ isOpen: boolean; sessionId: number | null }>({
     isOpen: false,
@@ -122,8 +122,12 @@ const MentorSchedule: React.FC = () => {
 
         const data = Array.isArray(resp) ? resp : (resp?.data ?? []);
 
+        // Filter out specific batches (1, 5, 6, 7)
+        const excludedBatches = [1, 5, 6, 7];
+        const filteredData = (data as any[]).filter((s: any) => !excludedBatches.includes(Number(s.batch_id)));
+
         // Map to UiSession
-        const mapped: UiSession[] = (data as any[]).map((s: any) => {
+        const mapped: UiSession[] = filteredData.map((s: any) => {
           const rawDt = s.session_datetime ?? s.sessionDate ?? s.dateTime ?? s.datetime;
           const dt = rawDt ? new Date(rawDt) : new Date();
 

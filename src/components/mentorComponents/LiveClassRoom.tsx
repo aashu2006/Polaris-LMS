@@ -50,7 +50,7 @@ const LiveClassRoom: React.FC<LiveClassRoomProps> = ({ sessionData, onClose }) =
   const [connectionEstablished, setConnectionEstablished] = useState(false)
   const [showParticipants, setShowParticipants] = useState(false)
   const visiblePeers = useMemo(
-    () => peers.filter(peer => !(peer as any).isAuxiliary),
+    () => peers.filter(peer => !(peer as any).isAuxiliary && !/beam/i.test(peer.name)),
     [peers]
   )
 
@@ -386,7 +386,15 @@ const LiveClassRoom: React.FC<LiveClassRoomProps> = ({ sessionData, onClose }) =
 
         <button
           onClick={toggleScreenShare}
-          className={`control-btn ${isScreenSharing ? 'active' : ''}`}
+          className={`control-btn ${isScreenSharing ? 'active' : ''} ${peers.some(p => p.auxiliaryTracks?.length > 0 && !p.isLocal) ? 'disabled' : ''}`}
+          disabled={peers.some(p => p.auxiliaryTracks?.length > 0 && !p.isLocal)}
+          title={
+            peers.some(p => p.auxiliaryTracks?.length > 0 && !p.isLocal)
+              ? 'Someone is already sharing their screen'
+              : isScreenSharing
+                ? 'Stop sharing screen'
+                : 'Share screen'
+          }
         >
           {isScreenSharing ? <ScreenShare size={24} /> : <ScreenShareOff size={24} />}
         </button>

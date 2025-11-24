@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { Calendar, Video, FileText, Github, Award, Clock, Users, BookOpen, PlayCircle, CheckCircle, AlertCircle, Upload, File, X, Mail, Phone, Briefcase, User, ChevronDown, LogOut, Settings } from 'lucide-react';
+import { Calendar, Video, FileText, Github, Award, Clock, Users, BookOpen, PlayCircle, CheckCircle, AlertCircle, Upload, X, User, ChevronDown, LogOut, Settings } from 'lucide-react';
 
 import { useApi } from '../../services/api';
 import { useAuth } from '../../contexts/AuthContext';
@@ -118,18 +118,12 @@ interface UploadedFile {
   program: string;
 }
 
-interface MentorInfo {
-  name: string;
-  photo: string;
-  email: string;
-  phone: string;
-  department: string;
-  bio: string;
-}
+
 
 const StudentProfile = () => {
   const api = useApi();
   const { user, logout } = useAuth();
+  const [userBatchId, setUserBatchId] = useState<number | null>(null);
   const [showUserDropdown, setShowUserDropdown] = useState(false);
   const [activeTab, setActiveTab] = useState<'overview' | 'schedule' | 'recordings' | 'assignments' | 'contributions'>('overview');
   const [showUploadModal, setShowUploadModal] = useState(false);
@@ -201,6 +195,20 @@ const StudentProfile = () => {
   const [showVideoPlayer, setShowVideoPlayer] = useState(false);
   const [selectedRecording, setSelectedRecording] = useState<Recording | null>(null);
 
+  useEffect(() => {
+    const fetchUserProfile = async () => {
+      try {
+        const profile = await api.ums.getUserProfile();
+        if (profile?.data?.batchId) {
+          setUserBatchId(profile.data.batchId);
+        }
+      } catch (error) {
+        console.error('Error fetching user profile:', error);
+      }
+    };
+    fetchUserProfile();
+  }, [api.ums]);
+
   const mapAssignmentFromApi = (item: any): StudentAssignmentListItem => {
     const assignmentData = item?.assignments || {};
     const status = normalizeAssignmentStatus(item?.status, item?.obtained_marks);
@@ -262,10 +270,10 @@ const StudentProfile = () => {
 
   const formatRecordingDate = (dateString: string): string => {
     const date = new Date(dateString);
-    return date.toLocaleDateString('en-US', { 
-      month: 'short', 
-      day: 'numeric', 
-      year: 'numeric' 
+    return date.toLocaleDateString('en-US', {
+      month: 'short',
+      day: 'numeric',
+      year: 'numeric'
     });
   };
 
@@ -332,45 +340,59 @@ const StudentProfile = () => {
   }, [api.lms.students]);
 
   // Fetch recordings
-    useEffect(() => {
-      const fetchRecordings = async () => {
-        if (!user?.id) return;
-        
-        try {
-          setLoadingRecordings(true);
-          setRecordingsError(null);
-          
-          // Use the working student ID as fallback for testing
-          const testStudentId = '08faa382-56d6-4a7c-9482-ef6efdfa5bea';
-          const studentIdToUse = user.id || testStudentId;
-          
-          console.log('Fetching recordings for student:', studentIdToUse);
-          
-          const response: RecordingsResponse = await api.ums.students.getRecordings(studentIdToUse);
-          
-          if (response.status === 'success' && response.data.recordings) {
-            setRecordings(response.data.recordings);
-          } else {
-            setRecordingsError('Failed to fetch recordings');
-          }
-        } catch (err: any) {
-          console.error('Error fetching recordings:', err);
-          
-          // Show user-friendly error message
-          if (err?.message?.includes('multiple (or no) rows returned')) {
-            setRecordingsError('This student has multiple batches. Please contact support.');
-          } else if (err?.message?.includes('500')) {
-            setRecordingsError('Server error while fetching recordings. Please try again later.');
-          } else {
-            setRecordingsError(err?.message || 'Failed to load recordings');
-          }
-        } finally {
-          setLoadingRecordings(false);
-        }
-      };
+  useEffect(() => {
+    const fetchRecordings = async () => {
+      if (!user?.id) return;
 
-      fetchRecordings();
-    }, [user?.id, api.ums.students]);
+      try {
+        setLoadingRecordings(true);
+        setRecordingsError(null);
+
+        // Use the working student ID as fallback for testing
+        const testStudentId = '08faa382-56d6-4a7c-9482-ef6efdfa5bea';
+        const studentIdToUse = user.id || testStudentId;
+
+        const response: RecordingsResponse = await api.ums.students.getRecordings(studentIdToUse);
+
+        if (response.status === 'success' && Array.isArray(response.data.recordings)) {
+          // Filter out recordings from excluded batches
+          const excludedBatches = [1, 5, 6, 7];
+          const filteredRecordings = response.data.recordings.filter(
+            (rec) => {
+              let bId = Number(rec.batchId);
+
+              // Fallback to user's batch ID if recording doesn't have one
+              if (isNaN(bId) && userBatchId) {
+                bId = userBatchId;
+              }
+
+              const shouldExclude = excludedBatches.includes(bId);
+              // console.log(`Recording ${rec.id} Batch: ${bId} Exclude: ${shouldExclude}`);
+              return !shouldExclude;
+            }
+          );
+          setRecordings(filteredRecordings);
+        } else {
+          setRecordingsError('Failed to fetch recordings');
+        }
+      } catch (err: any) {
+        console.error('Error fetching recordings:', err);
+
+        // Show user-friendly error message
+        if (err?.message?.includes('multiple (or no) rows returned')) {
+          setRecordingsError('This student has multiple batches. Please contact support.');
+        } else if (err?.message?.includes('500')) {
+          setRecordingsError('Server error while fetching recordings. Please try again later.');
+        } else {
+          setRecordingsError(err?.message || 'Failed to load recordings');
+        }
+      } finally {
+        setLoadingRecordings(false);
+      }
+    };
+
+    fetchRecordings();
+  }, [user?.id, api.ums.students, userBatchId]);
 
   const loadAssignmentDetail = async (assignmentId: string) => {
     setAssignmentDetailLoading(true);
@@ -463,13 +485,13 @@ const StudentProfile = () => {
       console.log('📡 Calling submitAssignment API...');
       const response = await api.lms.students.submitAssignment(formData);
       console.log('✅ Submit response:', response);
-      
+
       const successMessage = response?.message || response?.data?.message || 'Assignment submitted successfully';
       setAssignmentSuccessMessage(successMessage);
       setDetailUploadFile(null);
 
       await loadAssignmentDetail(selectedAssignment.assignmentId);
-      
+
       try {
         const refresh = await api.lms.students.getAssignments();
         const raw = Array.isArray(refresh?.data) ? refresh.data : [];
@@ -518,9 +540,9 @@ const StudentProfile = () => {
     setSelectedFileType('Assignment');
   };
 
-  const handleDeleteFile = (fileId: string) => {
-    setUploadedFiles(uploadedFiles.filter(file => file.id !== fileId));
-  };
+
+
+
 
   const fetchClassSchedule = useCallback(
     async (silent: boolean = false) => {
@@ -539,7 +561,23 @@ const StudentProfile = () => {
           throw new Error(response.error || 'Failed to fetch class schedule');
         }
 
-        const data = Array.isArray(response) ? response : response?.data || [];
+        let data = Array.isArray(response) ? response : response?.data || [];
+
+        // Filter out excluded batches
+        const excludedBatches = [1, 5, 6, 7];
+        data = data.filter((s: any) => {
+          let bId = Number(s.batch_id || s.batchId);
+
+          // Fallback to user's batch ID if session doesn't have one
+          if (isNaN(bId) && userBatchId) {
+            bId = userBatchId;
+          }
+
+          const shouldExclude = excludedBatches.includes(bId);
+          // console.log(`Session ${s.id} Batch: ${bId} Exclude: ${shouldExclude}`);
+          return !shouldExclude;
+        });
+
         const now = new Date();
 
         const mapped: UpcomingClass[] = data.map((s: any) => {
@@ -692,7 +730,7 @@ const StudentProfile = () => {
         setRefreshingSchedule(false);
       }
     },
-    [api.lms.students]
+    [api.lms.students, userBatchId]
   );
 
   useEffect(() => {
@@ -847,7 +885,7 @@ const StudentProfile = () => {
         setIsJoiningSession(false);
         setTimeout(() => {
           if (!window.location.pathname.includes('/student/login') &&
-              !window.location.pathname.includes('/login')) {
+            !window.location.pathname.includes('/login')) {
             window.location.replace('/student/login');
           }
         }, 100);
@@ -859,14 +897,7 @@ const StudentProfile = () => {
     }
   };
 
-  const mentorInfo: MentorInfo = {
-    name: 'Sarah Mitchell',
-    photo: 'https://storage.googleapis.com/polaris-tech_cloudbuild/image_Mentor.jpg',
-    email: 'sarah.mitchell@academy.com',
-    phone: '+1 (555) 123-4567',
-    department: 'Frontend Development',
-    bio: 'Experienced React developer with 8+ years in the industry. Passionate about teaching modern web development and helping students achieve their goals.',
-  };
+
 
   const studentData = {
     name: 'Alex Johnson',
@@ -913,7 +944,7 @@ const StudentProfile = () => {
   const detailDueDate = assignmentDetail?.assignment?.due_date || selectedAssignment?.dueDate || null;
   const detailProgram = assignmentDetail?.assignment?.courses?.course_code || selectedAssignment?.program || '—';
   const detailBatch = assignmentDetail?.assignment?.batches?.batch_name || selectedAssignment?.batchName || null;
-  const detailTotalMarks = assignmentDetail?.assignment?.total_marks ?? selectedAssignment?.totalMarks ?? null;
+
 
   return (
     <div className="min-h-screen bg-[#0A0E1A]">
@@ -1017,51 +1048,46 @@ const StudentProfile = () => {
         <div className="flex gap-2 mb-8">
           <button
             onClick={() => setActiveTab('overview')}
-            className={`px-6 py-3 rounded-lg font-medium transition-all text-sm ${
-              activeTab === 'overview'
-                ? 'bg-[#FFC540] text-black'
-                : 'bg-transparent text-gray-400 hover:text-white'
-            }`}
+            className={`px-6 py-3 rounded-lg font-medium transition-all text-sm ${activeTab === 'overview'
+              ? 'bg-[#FFC540] text-black'
+              : 'bg-transparent text-gray-400 hover:text-white'
+              }`}
           >
             Overview
           </button>
           <button
             onClick={() => setActiveTab('schedule')}
-            className={`px-6 py-3 rounded-lg font-medium transition-all text-sm ${
-              activeTab === 'schedule'
-                ? 'bg-[#FFC540] text-black'
-                : 'bg-transparent text-gray-400 hover:text-white'
-            }`}
+            className={`px-6 py-3 rounded-lg font-medium transition-all text-sm ${activeTab === 'schedule'
+              ? 'bg-[#FFC540] text-black'
+              : 'bg-transparent text-gray-400 hover:text-white'
+              }`}
           >
             Schedule
           </button>
           <button
             onClick={() => setActiveTab('recordings')}
-            className={`px-6 py-3 rounded-lg font-medium transition-all text-sm ${
-              activeTab === 'recordings'
-                ? 'bg-[#FFC540] text-black'
-                : 'bg-transparent text-gray-400 hover:text-white'
-            }`}
+            className={`px-6 py-3 rounded-lg font-medium transition-all text-sm ${activeTab === 'recordings'
+              ? 'bg-[#FFC540] text-black'
+              : 'bg-transparent text-gray-400 hover:text-white'
+              }`}
           >
             Recordings
           </button>
           <button
             onClick={() => setActiveTab('assignments')}
-            className={`px-6 py-3 rounded-lg font-medium transition-all text-sm ${
-              activeTab === 'assignments'
-                ? 'bg-[#FFC540] text-black'
-                : 'bg-transparent text-gray-400 hover:text-white'
-            }`}
+            className={`px-6 py-3 rounded-lg font-medium transition-all text-sm ${activeTab === 'assignments'
+              ? 'bg-[#FFC540] text-black'
+              : 'bg-transparent text-gray-400 hover:text-white'
+              }`}
           >
             Assignments
           </button>
           <button
             onClick={() => setActiveTab('contributions')}
-            className={`px-6 py-3 rounded-lg font-medium transition-all text-sm ${
-              activeTab === 'contributions'
-                ? 'bg-[#FFC540] text-black'
-                : 'bg-transparent text-gray-400 hover:text-white'
-            }`}
+            className={`px-6 py-3 rounded-lg font-medium transition-all text-sm ${activeTab === 'contributions'
+              ? 'bg-[#FFC540] text-black'
+              : 'bg-transparent text-gray-400 hover:text-white'
+              }`}
           >
             Contributions
           </button>
@@ -1274,9 +1300,9 @@ const StudentProfile = () => {
                         className="bg-[#0d1420] rounded-lg overflow-hidden border border-gray-800 hover:border-gray-700 transition-all cursor-pointer group"
                       >
                         <div className="relative">
-                          <img 
+                          <img
                             src="https://media.istockphoto.com/id/1193698730/video/mans-hands-coding-on-laptop-close-up-man-using-portable-computers-man-programmer-writes-code.jpg?s=640x640&k=20&c=QUvOTUEJBXa889HtXbzIQY0dZBXY_jEjEvbJU3seEcI="
-                            alt={recording.title} 
+                            alt={recording.title}
                             className="w-full h-32 object-cover"
                             onError={(e) => {
                               e.currentTarget.src = 'src="https://media.istockphoto.com/id/1193698730/video/mans-hands-coding-on-laptop-close-up-man-using-portable-computers-man-programmer-writes-code.jpg?s=640x640&k=20&c=QUvOTUEJBXa889HtXbzIQY0dZBXY_jEjEvbJU3seEcI=';
@@ -1545,7 +1571,7 @@ const StudentProfile = () => {
         {activeTab === 'recordings' && (
           <div className="bg-[#1a2332] rounded-xl p-6 border border-gray-800">
             <h2 className="text-xl font-bold text-white mb-6">Recorded Sessions</h2>
-            
+
             {loadingRecordings ? (
               <div className="flex justify-center items-center h-64">
                 <div className="text-gray-400">Loading recordings...</div>
@@ -1569,9 +1595,9 @@ const StudentProfile = () => {
                     className="bg-[#0d1420] rounded-lg overflow-hidden border border-gray-800 hover:border-gray-700 transition-all cursor-pointer group"
                   >
                     <div className="relative">
-                      <img 
-                        src={recording.thumbnailUrl} 
-                        alt={recording.title} 
+                      <img
+                        src={recording.thumbnailUrl}
+                        alt={recording.title}
                         className="w-full h-48 object-cover"
                         onError={(e) => {
                           e.currentTarget.src = 'https://media.istockphoto.com/id/1193698730/video/mans-hands-coding-on-laptop-close-up-man-using-portable-computers-man-programmer-writes-code.jpg?s=640x640&k=20&c=QUvOTUEJBXa889HtXbzIQY0dZBXY_jEjEvbJU3seEcI=';
@@ -1784,24 +1810,22 @@ const StudentProfile = () => {
                       <div className="flex-1">
                         <div className="flex items-center gap-3 mb-2">
                           <span
-                            className={`px-3 py-1 rounded-full text-sm font-bold ${
-                              contribution.type === 'PR'
-                                ? 'bg-purple-500/20 text-purple-400'
-                                : contribution.type === 'Issue'
+                            className={`px-3 py-1 rounded-full text-sm font-bold ${contribution.type === 'PR'
+                              ? 'bg-purple-500/20 text-purple-400'
+                              : contribution.type === 'Issue'
                                 ? 'bg-green-500/20 text-green-400'
                                 : 'bg-blue-500/20 text-blue-400'
-                            }`}
+                              }`}
                           >
                             {contribution.type}
                           </span>
                           <span
-                            className={`px-3 py-1 rounded-full text-xs font-semibold ${
-                              contribution.status === 'merged'
-                                ? 'bg-green-500/20 text-green-400'
-                                : contribution.status === 'open'
+                            className={`px-3 py-1 rounded-full text-xs font-semibold ${contribution.status === 'merged'
+                              ? 'bg-green-500/20 text-green-400'
+                              : contribution.status === 'open'
                                 ? 'bg-[#FFC540]/20 text-[#FFC540]'
                                 : 'bg-red-500/20 text-red-400'
-                            }`}
+                              }`}
                           >
                             {contribution.status.toUpperCase()}
                           </span>
@@ -1966,12 +1990,12 @@ const StudentProfile = () => {
                 disabled={uploadingAssignment || !detailUploadFile || !canUploadAssignment}
                 className="px-5 py-2 rounded-lg bg-[#FFC540] text-black font-semibold hover:bg-[#e6b139] transition disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                {uploadingAssignment 
-                  ? 'Submitting...' 
-                  : !detailUploadFile 
-                    ? 'Select a file to upload' 
-                    : !canUploadAssignment 
-                      ? 'Submission Locked' 
+                {uploadingAssignment
+                  ? 'Submitting...'
+                  : !detailUploadFile
+                    ? 'Select a file to upload'
+                    : !canUploadAssignment
+                      ? 'Submission Locked'
                       : 'Submit Assignment'}
               </button>
             </div>
@@ -2119,17 +2143,17 @@ const StudentProfile = () => {
         </div>
       )}
       {/* Video Player Modal */}
-        {showVideoPlayer && selectedRecording && (
-          <VideoPlayerModal
-            isOpen={showVideoPlayer}
-            onClose={() => {
-              setShowVideoPlayer(false);
-              setSelectedRecording(null);
-            }}
-            videoUrl={`https://prod-video-transcoding.polariscampus.com/v1/vod/sessions/${selectedRecording.sessionId}/master-playlist`}
-            title={selectedRecording.title}
-          />
-        )}
+      {showVideoPlayer && selectedRecording && (
+        <VideoPlayerModal
+          isOpen={showVideoPlayer}
+          onClose={() => {
+            setShowVideoPlayer(false);
+            setSelectedRecording(null);
+          }}
+          videoUrl={`https://prod-video-transcoding.polariscampus.com/v1/vod/sessions/${selectedRecording.sessionId}/master-playlist`}
+          title={selectedRecording.title}
+        />
+      )}
     </div>
   );
 };
