@@ -81,7 +81,7 @@ const MentorSchedule: React.FC = () => {
   const handleBatchChange = (batchId: string) => {
     setSelectedBatchId(batchId);
     setSections([]);
-    setSessionData({...sessionData, section_id: ''}); // Reset section when batch changes
+    setSessionData({ ...sessionData, section_id: '' }); // Reset section when batch changes
   };
 
   type UiSession = {
@@ -105,37 +105,37 @@ const MentorSchedule: React.FC = () => {
 
   useEffect(() => {
     let isMounted = true;
-  
+
     async function load() {
       if (!token) {
         setLoading(false);
         return;
       }
-  
+
       try {
         setLoading(true);
         setError(null);
-  
+
 
         // Use getFacultyStudents API which returns sessions with student_count
         const resp = await api.lms.mentors.getFacultyStudents();
 
         const data = Array.isArray(resp) ? resp : (resp?.data ?? []);
-  
+
         // Map to UiSession
         const mapped: UiSession[] = (data as any[]).map((s: any) => {
           const rawDt = s.session_datetime ?? s.sessionDate ?? s.dateTime ?? s.datetime;
           const dt = rawDt ? new Date(rawDt) : new Date();
-  
+
           const yyyy = dt.getFullYear();
           const mm = String(dt.getMonth() + 1).padStart(2, '0');
           const dd = String(dt.getDate()).padStart(2, '0');
           const hh = String(dt.getHours()).padStart(2, '0');
           const mi = String(dt.getMinutes()).padStart(2, '0');
-  
+
           const rawStatus = (s.status ?? 'scheduled').toString().toLowerCase();
           const uiStatus = rawStatus === 'upcoming' ? 'scheduled' : rawStatus;
-  
+
           return {
             id: Number(s.session_id ?? s.id ?? Date.now()),
             title: s.course_name ?? s.title ?? 'Session',
@@ -150,7 +150,7 @@ const MentorSchedule: React.FC = () => {
             dateTime: dt,
           } as UiSession;
         });
-  
+
         if (isMounted) setSessions(mapped);
       } catch (err: any) {
         console.error('Error loading sessions:', err);
@@ -159,11 +159,11 @@ const MentorSchedule: React.FC = () => {
         if (isMounted) setLoading(false);
       }
     }
-  
+
     load();
     return () => { isMounted = false; };
-  }, [api, token, user]); 
-  
+  }, [api, token, user]);
+
   const formatTime = (time: string) => {
     const [hours, minutes] = time.split(':');
     const hour = parseInt(hours);
@@ -176,7 +176,7 @@ const MentorSchedule: React.FC = () => {
   const startOfWeek = (d: Date) => {
     const date = new Date(d);
     const day = (date.getDay() + 6) % 7; // Mon=0 ... Sun=6
-    date.setHours(0,0,0,0);
+    date.setHours(0, 0, 0, 0);
     date.setDate(date.getDate() - day);
     return date;
   };
@@ -188,12 +188,12 @@ const MentorSchedule: React.FC = () => {
   };
   const startOfMonth = (d: Date) => {
     const date = new Date(d.getFullYear(), d.getMonth(), 1);
-    date.setHours(0,0,0,0);
+    date.setHours(0, 0, 0, 0);
     return date;
   };
   const endOfMonth = (d: Date) => {
     const date = new Date(d.getFullYear(), d.getMonth() + 1, 1);
-    date.setHours(0,0,0,0);
+    date.setHours(0, 0, 0, 0);
     return date;
   };
 
@@ -259,7 +259,7 @@ const MentorSchedule: React.FC = () => {
   const handleScheduleSession = async () => {
     try {
       setLoading(true);
-      
+
       const sessionPayload = {
         section_id: parseInt(sessionData.section_id),
         faculty_id: user?.id,
@@ -311,22 +311,20 @@ const MentorSchedule: React.FC = () => {
           <div className="flex items-center bg-gray-100 rounded-lg p-1">
             <button
               onClick={() => setViewMode('week')}
-              className={`px-3 py-1 text-sm rounded-md transition-colors duration-200 ${
-                viewMode === 'week' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-600'
-              }`}
+              className={`px-3 py-1 text-sm rounded-md transition-colors duration-200 ${viewMode === 'week' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-600'
+                }`}
             >
               Week
             </button>
             <button
               onClick={() => setViewMode('month')}
-              className={`px-3 py-1 text-sm rounded-md transition-colors duration-200 ${
-                viewMode === 'month' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-600'
-              }`}
+              className={`px-3 py-1 text-sm rounded-md transition-colors duration-200 ${viewMode === 'month' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-600'
+                }`}
             >
               Month
             </button>
           </div>
-          <button 
+          <button
             onClick={openScheduleModal}
             className="flex items-center space-x-2 bg-yellow-400 text-black px-4 py-2 rounded-lg hover:bg-yellow-500 transition-colors duration-200"
           >
@@ -370,7 +368,7 @@ const MentorSchedule: React.FC = () => {
                       </span>
                     )}
                   </div>
-                  
+
                   <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 text-sm text-gray-600">
                     <div className="flex items-center space-x-2">
                       <Calendar className="h-4 w-4" />
@@ -389,13 +387,13 @@ const MentorSchedule: React.FC = () => {
                     </div>
                   </div>
                 </div>
-                
+
                 <div className="flex items-center space-x-2">
                   <button className="flex items-center space-x-2 bg-green-500 text-white px-3 py-1 rounded-lg hover:bg-green-600 transition-colors duration-200">
                     <Video className="h-4 w-4" />
                     <span>Start</span>
                   </button>
-                  <button 
+                  <button
                     onClick={() => handleReschedule(session.id)}
                     className="p-2 text-gray-400 hover:text-yellow-400 transition-colors duration-200"
                     title="Reschedule session"
@@ -473,46 +471,46 @@ const MentorSchedule: React.FC = () => {
                 <X className="h-5 w-5" />
               </button>
             </div>
-            
+
             <div className="p-6 space-y-4">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">New Date</label>
                 <input
                   type="date"
                   value={rescheduleData.date}
-                  onChange={(e) => setRescheduleData({...rescheduleData, date: e.target.value})}
+                  onChange={(e) => setRescheduleData({ ...rescheduleData, date: e.target.value })}
                   className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-yellow-400 focus:border-transparent"
                 />
               </div>
-              
+
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">New Time</label>
                 <input
                   type="time"
                   value={rescheduleData.time}
-                  onChange={(e) => setRescheduleData({...rescheduleData, time: e.target.value})}
+                  onChange={(e) => setRescheduleData({ ...rescheduleData, time: e.target.value })}
                   className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-yellow-400 focus:border-transparent"
                 />
               </div>
-              
+
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">Reason for Rescheduling</label>
                 <textarea
                   value={rescheduleData.reason}
-                  onChange={(e) => setRescheduleData({...rescheduleData, reason: e.target.value})}
+                  onChange={(e) => setRescheduleData({ ...rescheduleData, reason: e.target.value })}
                   placeholder="Optional: Explain why you're rescheduling this session..."
                   rows={3}
                   className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-yellow-400 focus:border-transparent resize-none"
                 />
               </div>
-              
+
               <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3">
                 <p className="text-sm text-yellow-800">
                   <strong>Note:</strong> Students will be automatically notified of the schedule change via email and in-app notifications.
                 </p>
               </div>
             </div>
-            
+
             <div className="flex items-center justify-end space-x-3 p-6 border-t border-gray-200">
               <button
                 onClick={closeRescheduleModal}
@@ -545,7 +543,7 @@ const MentorSchedule: React.FC = () => {
                 <X className="h-5 w-5" />
               </button>
             </div>
-            
+
             <div className="p-6 space-y-4">
               {/* Batch Selection */}
               <div>
@@ -576,7 +574,7 @@ const MentorSchedule: React.FC = () => {
                   </label>
                   <select
                     value={sessionData.section_id}
-                    onChange={(e) => setSessionData({...sessionData, section_id: e.target.value})}
+                    onChange={(e) => setSessionData({ ...sessionData, section_id: e.target.value })}
                     className="w-full border border-gray-300 rounded-lg px-3 py-2 pr-8 focus:outline-none focus:ring-2 focus:ring-yellow-400 focus:border-transparent appearance-none bg-[length:16px_16px] bg-[position:right_0.5rem_center] bg-no-repeat"
                     style={{ backgroundImage: "url(\"data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3e%3cpath stroke='%236b7280' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='M6 8l4 4 4-4'/%3e%3c/svg%3e\")" }}
                     required
@@ -598,7 +596,7 @@ const MentorSchedule: React.FC = () => {
                 </label>
                 <select
                   value={sessionData.session_type}
-                  onChange={(e) => setSessionData({...sessionData, session_type: e.target.value})}
+                  onChange={(e) => setSessionData({ ...sessionData, session_type: e.target.value })}
                   className="w-full border border-gray-300 rounded-lg px-3 py-2 pr-8 focus:outline-none focus:ring-2 focus:ring-yellow-400 focus:border-transparent appearance-none bg-[length:16px_16px] bg-[position:right_0.5rem_center] bg-no-repeat"
                   style={{ backgroundImage: "url(\"data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3e%3cpath stroke='%236b7280' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='M6 8l4 4 4-4'/%3e%3c/svg%3e\")" }}
                   required
@@ -615,7 +613,7 @@ const MentorSchedule: React.FC = () => {
                 </label>
                 <select
                   value={sessionData.venue}
-                  onChange={(e) => setSessionData({...sessionData, venue: e.target.value})}
+                  onChange={(e) => setSessionData({ ...sessionData, venue: e.target.value })}
                   className="w-full border border-gray-300 rounded-lg px-3 py-2 pr-8 focus:outline-none focus:ring-2 focus:ring-yellow-400 focus:border-transparent appearance-none bg-[length:16px_16px] bg-[position:right_0.5rem_center] bg-no-repeat"
                   style={{ backgroundImage: "url(\"data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3e%3cpath stroke='%236b7280' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='M6 8l4 4 4-4'/%3e%3c/svg%3e\")" }}
                   required
@@ -638,7 +636,7 @@ const MentorSchedule: React.FC = () => {
                 <input
                   type="text"
                   value={sessionData.session_title}
-                  onChange={(e) => setSessionData({...sessionData, session_title: e.target.value})}
+                  onChange={(e) => setSessionData({ ...sessionData, session_title: e.target.value })}
                   placeholder="e.g., React Fundamentals"
                   className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-yellow-400 focus:border-transparent"
                   required
@@ -653,7 +651,7 @@ const MentorSchedule: React.FC = () => {
                 <input
                   type="date"
                   value={sessionData.start_date}
-                  onChange={(e) => setSessionData({...sessionData, start_date: e.target.value})}
+                  onChange={(e) => setSessionData({ ...sessionData, start_date: e.target.value })}
                   className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-yellow-400 focus:border-transparent"
                   required
                 />
@@ -667,7 +665,7 @@ const MentorSchedule: React.FC = () => {
                 <input
                   type="time"
                   value={sessionData.class_time}
-                  onChange={(e) => setSessionData({...sessionData, class_time: e.target.value})}
+                  onChange={(e) => setSessionData({ ...sessionData, class_time: e.target.value })}
                   className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-yellow-400 focus:border-transparent"
                   required
                 />
@@ -680,7 +678,7 @@ const MentorSchedule: React.FC = () => {
                 </label>
                 <select
                   value={sessionData.duration}
-                  onChange={(e) => setSessionData({...sessionData, duration: parseInt(e.target.value)})}
+                  onChange={(e) => setSessionData({ ...sessionData, duration: parseInt(e.target.value) })}
                   className="w-full border border-gray-300 rounded-lg px-3 py-2 pr-8 focus:outline-none focus:ring-2 focus:ring-yellow-400 focus:border-transparent appearance-none bg-[length:16px_16px] bg-[position:right_0.5rem_center] bg-no-repeat"
                   style={{ backgroundImage: "url(\"data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3e%3cpath stroke='%236b7280' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='M6 8l4 4 4-4'/%3e%3c/svg%3e\")" }}
                   required
@@ -699,7 +697,7 @@ const MentorSchedule: React.FC = () => {
                 <label className="block text-sm font-medium text-gray-700 mb-2">Program</label>
                 <select
                   value={sessionData.program}
-                  onChange={(e) => setSessionData({...sessionData, program: e.target.value})}
+                  onChange={(e) => setSessionData({ ...sessionData, program: e.target.value })}
                   className="w-full border border-gray-300 rounded-lg px-3 py-2 pr-8 focus:outline-none focus:ring-2 focus:ring-yellow-400 focus:border-transparent appearance-none bg-[length:16px_16px] bg-[position:right_0.5rem_center] bg-no-repeat"
                   style={{ backgroundImage: "url(\"data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3e%3cpath stroke='%236b7280' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='M6 8l4 4 4-4'/%3e%3c/svg%3e\")" }}
                 >
@@ -718,7 +716,7 @@ const MentorSchedule: React.FC = () => {
                 <input
                   type="text"
                   value={sessionData.cohort}
-                  onChange={(e) => setSessionData({...sessionData, cohort: e.target.value})}
+                  onChange={(e) => setSessionData({ ...sessionData, cohort: e.target.value })}
                   placeholder="e.g., 2024-A"
                   className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-yellow-400 focus:border-transparent"
                 />
@@ -730,13 +728,13 @@ const MentorSchedule: React.FC = () => {
                 <input
                   type="text"
                   value={sessionData.location}
-                  onChange={(e) => setSessionData({...sessionData, location: e.target.value})}
+                  onChange={(e) => setSessionData({ ...sessionData, location: e.target.value })}
                   placeholder="Physical location or coordinates"
                   className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-yellow-400 focus:border-transparent"
                 />
               </div>
             </div>
-            
+
             <div className="flex items-center justify-end space-x-3 p-6 border-t border-gray-200 bg-gray-50">
               <button
                 onClick={closeScheduleModal}
