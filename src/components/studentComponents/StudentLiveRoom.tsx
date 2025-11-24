@@ -52,6 +52,7 @@ const StudentLiveRoom: React.FC = () => {
   const [pinnedPeerId, setPinnedPeerId] = useState<string | null>(null);
   const [showParticipants, setShowParticipants] = useState(false);
   const [isScreenSharing, setIsScreenSharing] = useState(false);
+  const hadTutorBeforeRef = useRef(false);
 
   const sessionToken = useMemo(() => {
     return localStorage.getItem('live_class_token');
