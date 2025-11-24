@@ -139,56 +139,60 @@ const StudentLiveRoom: React.FC = () => {
   useEffect(() => {
     if (!notification) return;
 
-    const notificationType = typeof notification === 'string' 
-      ? notification 
-      : notification?.type || notification?.notification?.type || notification?.id;
+    const notificationType = notification.type;
 
-    if (notificationType && (
-      notificationType === 'ROOM_ENDED' || 
-      notificationType === 'ROOM_ENDED_BY_HOST' ||
-      String(notificationType).includes('ROOM_ENDED') ||
-      String(notificationType).includes('room-ended')
-    )) {
-      console.log('Room ended notification received:', notification);
-      const message = typeof notification === 'object' 
-        ? (notification?.message || notification?.notification?.message || 'The session has ended by the mentor.')
-        : 'The session has ended by the mentor.';
+    // Log for debugging
+    console.log('HMS Notification:', notificationType, notification);
+
+    if (
+      notificationType === 'ROOM_ENDED' ||
+      notificationType === 'REMOVED_FROM_ROOM' ||
+      (notificationType as string) === 'ROOM_ENDED_BY_HOST' // Cast to string to avoid type error
+    ) {
+      console.log('Room ended or user removed:', notification);
+      const message = (notification as any).data?.reason || 'The session has ended by the mentor.';
       handleAutoLeave(message);
     }
   }, [notification, handleAutoLeave]);
 
   const prevConnectedRef = useRef<boolean | null>(null);
-  
+
   useEffect(() => {
+    // Case 1: Connection lost after being connected
     if (prevConnectedRef.current === true && !isConnected && hasAttemptedJoin && !isJoining && !isLeaving) {
       console.log('Room connection lost - session ended by mentor');
       handleAutoLeave('The session has ended by the mentor.');
     }
-    
+
     if (hasAttemptedJoin && !isJoining) {
-      prevConnectedRef.current = isConnected;
+      prevConnectedRef.current = isConnected || false; // Handle undefined
     }
   }, [isConnected, hasAttemptedJoin, isJoining, isLeaving, handleAutoLeave]);
 
+  // Monitor peers to detect when mentor leaves
   useEffect(() => {
-    if (hasAttemptedJoin && !isJoining && !isLeaving && visiblePeers.length === 0 && !isConnected) {
+    // If we are not connected yet or leaving, skip
+    if (!hasAttemptedJoin || isJoining || isLeaving) return;
+
+    // Case 2: All peers disappeared (room likely ended)
+    if (visiblePeers.length === 0 && !isConnected) {
       const timeoutId = setTimeout(() => {
         if (visiblePeers.length === 0 && !isConnected && hasAttemptedJoin) {
           console.log('All peers disappeared - room ended');
           handleAutoLeave('The session has ended by the mentor.');
         }
       }, 2000);
-
       return () => clearTimeout(timeoutId);
     }
 
     const currentHasTutor = remotePeers.some((peer) => peer.roleName?.toLowerCase() === 'tutor');
-    
+
     if (currentHasTutor) {
       hadTutorBeforeRef.current = true;
     }
-    
-    if (hadTutorBeforeRef.current && !currentHasTutor && !isConnected && hasAttemptedJoin && !isJoining && !isLeaving) {
+
+    // Case 3: Tutor was present but is now gone (and we might be disconnected)
+    if (hadTutorBeforeRef.current && !currentHasTutor && !isConnected) {
       const timeoutId = setTimeout(() => {
         if (!isConnected && hasAttemptedJoin) {
           console.log('Tutor left and connection lost - session ended');
@@ -196,31 +200,24 @@ const StudentLiveRoom: React.FC = () => {
           hadTutorBeforeRef.current = false;
         }
       }, 1500);
-
       return () => clearTimeout(timeoutId);
     }
-  }, [visiblePeers.length, remotePeers, isConnected, hasAttemptedJoin, isJoining, isLeaving, handleAutoLeave]);
 
-  useEffect(() => {
-    if (hasAttemptedJoin && !isJoining && !isConnected && !isLeaving) {
-      console.log('Room connection lost - session ended by mentor');
-      handleAutoLeave('The session has ended by the mentor.');
-      return;
-    }
-
-    const hasTutor = remotePeers.some((peer) => peer.roleName?.toLowerCase() === 'tutor');
-    if (hasAttemptedJoin && !isJoining && !isLeaving && remotePeers.length > 0 && !hasTutor) {
+    // Case 4: We are still connected, but Tutor left (and we are the only ones or just students left)
+    // Only trigger this if we are sure the tutor was there before
+    if (isConnected && hadTutorBeforeRef.current && !currentHasTutor) {
       const timeoutId = setTimeout(() => {
-        const stillNoTutor = !visiblePeers.some((peer) => peer.roleName?.toLowerCase() === 'tutor' && !peer.isLocal);
+        // Double check after delay
+        const stillNoTutor = !remotePeers.some((peer) => peer.roleName?.toLowerCase() === 'tutor');
         if (stillNoTutor) {
-          console.log('Tutor has left - ending session');
-          handleAutoLeave('The mentor has left the session.');
+          console.log('Tutor has left the room - ending session for student');
+          handleAutoLeave('The mentor has ended the session.');
         }
-      }, 3000);
-
+      }, 5000); // Give a bit more grace period (5s) for refresh/reconnect
       return () => clearTimeout(timeoutId);
     }
-  }, [isConnected, remotePeers, visiblePeers, hasAttemptedJoin, isJoining, isLeaving, handleAutoLeave]);
+
+  }, [visiblePeers.length, remotePeers, isConnected, hasAttemptedJoin, isJoining, isLeaving, handleAutoLeave]);
 
   useEffect(() => {
     return () => {
@@ -468,12 +465,12 @@ const StudentLiveRoom: React.FC = () => {
                   </span>
                   <span className="participant-status">
                     <span className="icon-label">
-                      {peer.audioTrack && (peer.audioTrack.enabled === undefined || peer.audioTrack.enabled !== false) ? <Mic size={14} /> : <MicOff size={14} />}
-                      <span>{peer.audioTrack && (peer.audioTrack.enabled === undefined || peer.audioTrack.enabled !== false) ? 'On' : 'Muted'}</span>
+                      {peer.audioTrack && ((peer.audioTrack as any).enabled === undefined || (peer.audioTrack as any).enabled !== false) ? <Mic size={14} /> : <MicOff size={14} />}
+                      <span>{peer.audioTrack && ((peer.audioTrack as any).enabled === undefined || (peer.audioTrack as any).enabled !== false) ? 'On' : 'Muted'}</span>
                     </span>
                     <span className="icon-label">
-                      {peer.videoTrack && (peer.videoTrack.enabled === undefined || peer.videoTrack.enabled !== false) ? <Video size={14} /> : <VideoOff size={14} />}
-                      <span>{peer.videoTrack && (peer.videoTrack.enabled === undefined || peer.videoTrack.enabled !== false) ? 'On' : 'Off'}</span>
+                      {peer.videoTrack && ((peer.videoTrack as any).enabled === undefined || (peer.videoTrack as any).enabled !== false) ? <Video size={14} /> : <VideoOff size={14} />}
+                      <span>{peer.videoTrack && ((peer.videoTrack as any).enabled === undefined || (peer.videoTrack as any).enabled !== false) ? 'On' : 'Off'}</span>
                     </span>
                   </span>
                 </li>
