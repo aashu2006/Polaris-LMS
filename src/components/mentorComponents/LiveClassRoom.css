@@ -134,8 +134,8 @@
 
 .video-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
-  gap: 20px;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 16px;
   animation: fadeIn 0.5s ease-out;
 }
 
@@ -153,19 +153,41 @@
 
 @media (min-width: 1400px) {
   .video-grid {
-    grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    gap: 12px;
+    width: 100%;
+  }
+}
+
+/* Student view: smaller peer tiles */
+.live-class-room.student-live .video-grid {
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 12px;
+}
+
+@media (min-width: 1400px) {
+  .live-class-room.student-live .video-grid {
+    grid-template-columns: repeat(4, 1fr);
+    gap: 10px;
   }
 }
 
 .video-tile {
   position: relative;
-  background: linear-gradient(135deg, #374151 0%, #1f2937 100%);
-  border-radius: 16px;
+  background: #2d2d3d;
+  border-radius: 12px;
   overflow: hidden;
-  aspect-ratio: 16 / 9;
-  box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
-  border: 2px solid rgba(255, 255, 255, 0.1);
-  transition: all 0.3s ease;
+  aspect-ratio: 16/9;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.2);
+  transition: transform 0.3s ease, box-shadow 0.3s ease;
+  border: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+/* Smaller tiles for student view */
+.live-class-room.student-live .video-tile {
+  border-radius: 8px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
 }
 
 .video-tile.pinned {
@@ -184,6 +206,7 @@
   width: 100%;
   height: 100%;
   object-fit: cover;
+  display: block;
 }
 
 .no-video-fallback {
@@ -200,17 +223,25 @@
 
 .peer-info {
   position: absolute;
-  bottom: 16px;
-  left: 16px;
-  right: 16px;
+  bottom: 8px;
+  left: 8px;
+  right: 8px;
   display: flex;
   justify-content: space-between;
   align-items: center;
   background: rgba(0, 0, 0, 0.7);
   backdrop-filter: blur(10px);
-  padding: 10px 16px;
-  border-radius: 12px;
+  padding: 6px 10px;
+  border-radius: 8px;
   border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+/* Smaller peer info for student view */
+.live-class-room.student-live .peer-info {
+  padding: 4px 8px;
+  bottom: 6px;
+  left: 6px;
+  right: 6px;
 }
 
 .peer-name {
@@ -218,6 +249,11 @@
   font-size: 15px;
   font-weight: 700;
   text-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+}
+
+/* Smaller peer name for student view */
+.live-class-room.student-live .peer-name {
+  font-size: 12px;
 }
 
 .muted-indicator {
@@ -240,11 +276,12 @@
 }
 
 .room-controls {
+  height: 70px;
   display: flex;
   justify-content: center;
   align-items: center;
   gap: 20px;
-  padding: 24px 32px;
+  padding: 10px 22px;
   background: rgba(45, 45, 61, 0.8);
   backdrop-filter: blur(20px);
   border-top: 1px solid rgba(255, 255, 255, 0.1);
@@ -254,8 +291,8 @@
 }
 
 .control-btn {
-  width: 64px;
-  height: 64px;
+  width: 54px;
+  height: 54px;
   border: none;
   border-radius: 50%;
   background: linear-gradient(135deg, #4b5563 0%, #374151 100%);
@@ -384,7 +421,7 @@
 }
 
 .room-footer {
-  padding: 16px 32px;
+  padding: 6px 32px;
   background: rgba(45, 45, 61, 0.6);
   backdrop-filter: blur(20px);
   text-align: center;

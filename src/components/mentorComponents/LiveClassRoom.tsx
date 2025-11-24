@@ -61,7 +61,6 @@ const LiveClassRoom: React.FC<LiveClassRoomProps> = ({ sessionData, onClose }) =
   const isConnectedRef = useRef(false)
   const uiFallbackRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
-  // Monitor connection state and hide loading when connected
   useEffect(() => {
     isConnectedRef.current = isConnected || false
 
@@ -90,7 +89,6 @@ const LiveClassRoom: React.FC<LiveClassRoomProps> = ({ sessionData, onClose }) =
     }
   }, [peers.length, isJoining, connectionEstablished])
 
-  // Join room when session data is available
   useEffect(() => {
     if (sessionData?.hms?.authToken && !joinAttemptedRef.current) {
       joinAttemptedRef.current = true
@@ -201,7 +199,6 @@ const LiveClassRoom: React.FC<LiveClassRoomProps> = ({ sessionData, onClose }) =
           setIsJoining(false)
         }
       } catch (_) {
-        // best-effort only
       }
     }
     checkPermissions()
@@ -249,6 +246,13 @@ const LiveClassRoom: React.FC<LiveClassRoomProps> = ({ sessionData, onClose }) =
     setIsLeaving(true)
 
     try {
+      try {
+        await hmsActions.endRoom('Session ended by mentor', true)
+        console.log('✅ Room ended for all participants')
+      } catch (endRoomErr: any) {
+        console.warn('⚠️ Could not end room via HMS (may not have permission):', endRoomErr?.message)
+      }
+
       await api.multimedia.sessions.endSession(sessionData.sessionId, sessionData.facultyId)
     } catch (err: any) {
       console.error('❌ Error ending Multimedia session:', err.response?.data?.message || err.message)
@@ -357,11 +361,16 @@ const LiveClassRoom: React.FC<LiveClassRoomProps> = ({ sessionData, onClose }) =
                 />
                 <div className="peer-info">
                   <span className="peer-name">{peer.name}</span>
-                  {!peer.audioTrack && (
-                    <span className="muted-indicator">
-                      <MicOff size={18} />
+                  <div className="track-debug">
+                    <span className="icon-label">
+                      {peer.audioTrack && (peer.audioTrack.enabled === undefined || peer.audioTrack.enabled !== false) ? <Mic size={14} /> : <MicOff size={14} />}
+                      <span>{peer.audioTrack && (peer.audioTrack.enabled === undefined || peer.audioTrack.enabled !== false) ? 'On' : 'Muted'}</span>
                     </span>
-                  )}
+                    <span className="icon-label">
+                      {peer.videoTrack && (peer.videoTrack.enabled === undefined || peer.videoTrack.enabled !== false) ? <Video size={14} /> : <VideoOff size={14} />}
+                      <span>{peer.videoTrack && (peer.videoTrack.enabled === undefined || peer.videoTrack.enabled !== false) ? 'On' : 'Off'}</span>
+                    </span>
+                  </div>
                 </div>
               </div>
             ))}
@@ -448,12 +457,12 @@ const LiveClassRoom: React.FC<LiveClassRoomProps> = ({ sessionData, onClose }) =
                   </span>
                   <span className="participant-status">
                     <span className="icon-label">
-                      {peer.audioTrack ? <Mic size={14} /> : <MicOff size={14} />}
-                      <span>{peer.audioTrack ? 'On' : 'Muted'}</span>
+                      {peer.audioTrack && (peer.audioTrack.enabled === undefined || peer.audioTrack.enabled !== false) ? <Mic size={14} /> : <MicOff size={14} />}
+                      <span>{peer.audioTrack && (peer.audioTrack.enabled === undefined || peer.audioTrack.enabled !== false) ? 'On' : 'Muted'}</span>
                     </span>
                     <span className="icon-label">
-                      {peer.videoTrack ? <Video size={14} /> : <VideoOff size={14} />}
-                      <span>{peer.videoTrack ? 'On' : 'Off'}</span>
+                      {peer.videoTrack && (peer.videoTrack.enabled === undefined || peer.videoTrack.enabled !== false) ? <Video size={14} /> : <VideoOff size={14} />}
+                      <span>{peer.videoTrack && (peer.videoTrack.enabled === undefined || peer.videoTrack.enabled !== false) ? 'On' : 'Off'}</span>
                     </span>
                   </span>
                 </li>
