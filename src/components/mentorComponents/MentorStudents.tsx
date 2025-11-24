@@ -33,12 +33,12 @@ const MentorStudents: React.FC = () => {
   const [previousSessions, setPreviousSessions] = useState<SessionData[]>([]);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
-  
+
   const [feedbackModal, setFeedbackModal] = useState<{ isOpen: boolean; sessionId: number | null }>({
     isOpen: false,
     sessionId: null
   });
-  
+
   const [feedbackData, setFeedbackData] = useState({
     sessionTitle: '',
     sessionDate: '',
@@ -61,13 +61,13 @@ const MentorStudents: React.FC = () => {
     console.log('User:', user);
     console.log('UserId:', userId);
     fetchSessions();
-    
+
     // Refresh sessions every 30 seconds to get updated attendance data
     // This ensures attendance marked by webhook (50% threshold) is reflected in UI
     const refreshInterval = setInterval(() => {
       fetchSessions();
     }, 30000); // 30 seconds
-    
+
     return () => {
       clearInterval(refreshInterval);
     };
@@ -78,17 +78,17 @@ const MentorStudents: React.FC = () => {
     try {
       setLoading(true);
       const response = await api.lms.adminSchedule.getFacultySessions(userId);
-      
+
       const sessions = response.data || [];
       const now = new Date();
       const sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
-      
+
       const lastWeekSessions = sessions.filter((session: SessionData) => {
         const sessionDate = new Date(session.session_datetime);
         return sessionDate >= sevenDaysAgo && sessionDate <= now;
       });
 
-      setPreviousSessions(lastWeekSessions.sort((a: SessionData, b: SessionData) => 
+      setPreviousSessions(lastWeekSessions.sort((a: SessionData, b: SessionData) =>
         new Date(b.session_datetime).getTime() - new Date(a.session_datetime).getTime()
       ));
     } catch (err) {
@@ -102,16 +102,16 @@ const MentorStudents: React.FC = () => {
     console.log('=== openFeedbackModal called ===');
     console.log('sessionId received:', sessionId);
     console.log('previousSessions:', previousSessions);
-    
+
     // Try both session_id and id properties
     const session = previousSessions.find(s => (s as any).session_id === sessionId || (s as any).id === sessionId);
     console.log('Found session:', session);
-    
+
     if (session) {
       console.log('Session course name:', (session as any).course_name);
       console.log('Session students:', (session as any).students);
       console.log('Number of students:', (session as any).students?.length);
-      
+
       setFeedbackModal({ isOpen: true, sessionId });
       setFeedbackData(prev => ({
         ...prev,
@@ -196,7 +196,7 @@ const MentorStudents: React.FC = () => {
                     </div>
                   </div>
                   <div className="flex items-center space-x-2">
-                    <button 
+                    <button
                       onClick={() => openFeedbackModal(session.session_id || (session as any).id)}
                       className="flex items-center space-x-2 bg-[#FFC540] text-black px-4 py-2 rounded-lg hover:bg-[#e6b139] transition-colors duration-200"
                     >
@@ -236,10 +236,10 @@ interface StudentSelectionModalProps {
   api: any;
 }
 
-const StudentSelectionModal: React.FC<StudentSelectionModalProps> = ({ 
-  isOpen, 
-  sessionId, 
-  onClose, 
+const StudentSelectionModal: React.FC<StudentSelectionModalProps> = ({
+  isOpen,
+  sessionId,
+  onClose,
   sessions,
   userId,
   api
@@ -249,7 +249,7 @@ const StudentSelectionModal: React.FC<StudentSelectionModalProps> = ({
   const [submitting, setSubmitting] = useState(false);
   const [sessionStudents, setSessionStudents] = useState<SessionStudent[]>([]);
   const [loadingStudents, setLoadingStudents] = useState(true);
-  
+
   const [feedbackData, setFeedbackData] = useState({
     sessionTitle: '',
     sessionDate: '',
@@ -278,22 +278,22 @@ const StudentSelectionModal: React.FC<StudentSelectionModalProps> = ({
     try {
       setLoadingStudents(true);
       console.log('Fetching students for userId:', userId);
-      
+
       const response = await api.lms.mentors.getFacultyStudents(userId);
       console.log('API Response:', response);
       console.log('Session ID looking for:', sessionId);
-      
+
       const sessionsData = response.data || [];
       console.log('Sessions data:', sessionsData);
-      
+
       // Try both session_id and id properties
       const currentSession = sessionsData.find((s: any) => s.session_id === sessionId || s.id === sessionId);
       console.log('Current session found:', currentSession);
-      
+
       if (currentSession && currentSession.students) {
         console.log('Setting students:', currentSession.students);
         let studentsList = currentSession.students;
-        
+
         // Fetch attendance data from multimedia service if sessionId and courseId are available
         if (sessionId && currentSession.course_id) {
           try {
@@ -301,7 +301,7 @@ const StudentSelectionModal: React.FC<StudentSelectionModalProps> = ({
               sessionId,
               currentSession.course_id
             );
-            
+
             if (attendanceResponse && attendanceResponse.list) {
               // Create a map of studentId -> attendance status from multimedia service
               const attendanceMap = new Map();
@@ -309,7 +309,7 @@ const StudentSelectionModal: React.FC<StudentSelectionModalProps> = ({
                 const isPresent = student.isPresent === '1' || student.isPresent === 1;
                 attendanceMap.set(student.studentUserId, isPresent ? 'present' : 'absent');
               });
-              
+
               // Update attendance_status with multimedia service data (50% threshold)
               studentsList = studentsList.map((student: SessionStudent) => {
                 const updatedStatus = attendanceMap.get(student.student_id);
@@ -324,7 +324,7 @@ const StudentSelectionModal: React.FC<StudentSelectionModalProps> = ({
             // Continue without attendance data if API fails
           }
         }
-        
+
         setSessionStudents(studentsList);
       } else {
         console.log('No students found for this session');
@@ -421,11 +421,11 @@ const StudentSelectionModal: React.FC<StudentSelectionModalProps> = ({
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-      <div className="bg-gray-800 rounded-xl shadow-2xl w-full max-w-4xl max-h-[90vh] overflow-hidden border border-gray-700">
-        <div className="flex items-center justify-between p-6 border-b border-gray-700">
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[60]">
+      <div className="bg-gray-800 rounded-xl shadow-2xl w-full max-w-4xl max-h-[90vh] flex flex-col border border-gray-700">
+        <div className="flex items-center justify-between p-6 border-b border-gray-700 flex-none">
           <h3 className="text-xl font-bold text-white">
-            {showFeedbackForm 
+            {showFeedbackForm
               ? `Add Feedback - ${session?.course_name} - ${selectedStudent?.student_name}`
               : `Select Student - ${session?.course_name}`
             }
@@ -437,8 +437,8 @@ const StudentSelectionModal: React.FC<StudentSelectionModalProps> = ({
             ×
           </button>
         </div>
-        
-        <div className="p-6 overflow-y-auto max-h-[calc(90vh-180px)]">
+
+        <div className="p-6 overflow-y-auto flex-1">
           {!showFeedbackForm ? (
             <div>
               <h4 className="text-lg font-semibold text-white mb-4">Select a student to add feedback for:</h4>
@@ -456,23 +456,22 @@ const StudentSelectionModal: React.FC<StudentSelectionModalProps> = ({
                       onClick={() => handleStudentSelect(student)}
                       className="bg-gray-700 rounded-lg p-4 cursor-pointer hover:bg-gray-600 transition-colors duration-200"
                     >
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center space-x-3">
-                          <div className="w-10 h-10 bg-[#FFC540] rounded-full flex items-center justify-center text-black font-bold">
+                      <div className="flex items-center justify-between gap-3">
+                        <div className="flex items-center space-x-3 min-w-0">
+                          <div className="w-10 h-10 bg-[#FFC540] rounded-full flex items-center justify-center text-black font-bold flex-shrink-0">
                             {student.student_name.charAt(0)}
                           </div>
-                          <div>
-                            <h5 className="font-medium text-white">{student.student_name}</h5>
-                            <p className="text-sm text-gray-400">{student.student_email || 'No email'}</p>
+                          <div className="min-w-0">
+                            <h5 className="font-medium text-white truncate">{student.student_name}</h5>
+                            <p className="text-sm text-gray-400 truncate">{student.student_email || 'No email'}</p>
                           </div>
                         </div>
                         {student.attendance_status && student.attendance_status !== 'unknown' && (
-                          <div className="flex items-center space-x-2">
-                            <span className={`px-3 py-1 text-xs font-medium rounded-full ${
-                              student.attendance_status.toLowerCase() === 'present'
-                                ? 'bg-green-500/20 text-green-400'
-                                : 'bg-red-500/20 text-red-400'
-                            }`}>
+                          <div className="flex items-center space-x-2 flex-shrink-0">
+                            <span className={`px-3 py-1 text-xs font-medium rounded-full ${student.attendance_status.toLowerCase() === 'present'
+                              ? 'bg-green-500/20 text-green-400'
+                              : 'bg-red-500/20 text-red-400'
+                              }`}>
                               {student.attendance_status.charAt(0).toUpperCase() + student.attendance_status.slice(1)}
                             </span>
                           </div>
@@ -493,11 +492,11 @@ const StudentSelectionModal: React.FC<StudentSelectionModalProps> = ({
                   ← Back to student selection
                 </button>
               </div>
-              
+
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div className="space-y-4">
                   <h4 className="text-lg font-semibold text-white">Session Details</h4>
-                  
+
                   <div>
                     <label className="block text-sm font-medium text-gray-400 mb-2">Session Title</label>
                     <input
@@ -507,7 +506,7 @@ const StudentSelectionModal: React.FC<StudentSelectionModalProps> = ({
                       className="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-white"
                     />
                   </div>
-                  
+
                   <div>
                     <label className="block text-sm font-medium text-gray-400 mb-2">Session Date</label>
                     <input
@@ -517,12 +516,12 @@ const StudentSelectionModal: React.FC<StudentSelectionModalProps> = ({
                       className="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-white"
                     />
                   </div>
-                  
+
                   <div>
                     <label className="block text-sm font-medium text-gray-400 mb-2">Performance Rating</label>
                     <select
                       value={feedbackData.performance_rating}
-                      onChange={(e) => setFeedbackData({...feedbackData, performance_rating: parseInt(e.target.value)})}
+                      onChange={(e) => setFeedbackData({ ...feedbackData, performance_rating: parseInt(e.target.value) })}
                       className="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-white focus:outline-none focus:ring-2 focus:ring-[#FFC540]"
                     >
                       <option value={1}>1 - Needs Improvement</option>
@@ -538,26 +537,26 @@ const StudentSelectionModal: React.FC<StudentSelectionModalProps> = ({
                     </select>
                   </div>
                 </div>
-                
+
                 <div className="space-y-4">
                   <h4 className="text-lg font-semibold text-white">Feedback & Notes</h4>
-                  
+
                   <div>
                     <label className="block text-sm font-medium text-gray-400 mb-2">Overall Performance</label>
                     <textarea
                       value={feedbackData.overall_performance}
-                      onChange={(e) => setFeedbackData({...feedbackData, overall_performance: e.target.value})}
+                      onChange={(e) => setFeedbackData({ ...feedbackData, overall_performance: e.target.value })}
                       placeholder="Describe the student's overall performance..."
                       rows={3}
                       className="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-[#FFC540] resize-none"
                     />
                   </div>
-                  
+
                   <div>
                     <label className="block text-sm font-medium text-gray-400 mb-2">Strengths</label>
                     <textarea
                       value={feedbackData.strengh}
-                      onChange={(e) => setFeedbackData({...feedbackData, strengh: e.target.value})}
+                      onChange={(e) => setFeedbackData({ ...feedbackData, strengh: e.target.value })}
                       placeholder="What did the student do well?"
                       rows={2}
                       className="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-[#FFC540] resize-none"
@@ -565,35 +564,35 @@ const StudentSelectionModal: React.FC<StudentSelectionModalProps> = ({
                   </div>
                 </div>
               </div>
-              
+
               <div className="mt-6 space-y-4">
                 <div>
                   <label className="block text-sm font-medium text-gray-400 mb-2">Area for Improvement</label>
                   <textarea
                     value={feedbackData.area_for_improvement}
-                    onChange={(e) => setFeedbackData({...feedbackData, area_for_improvement: e.target.value})}
+                    onChange={(e) => setFeedbackData({ ...feedbackData, area_for_improvement: e.target.value })}
                     placeholder="What areas need more focus?"
                     rows={2}
                     className="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-[#FFC540] resize-none"
                   />
                 </div>
-                
+
                 <div>
                   <label className="block text-sm font-medium text-gray-400 mb-2">Homework Status</label>
                   <textarea
                     value={feedbackData.homework}
-                    onChange={(e) => setFeedbackData({...feedbackData, homework: e.target.value})}
+                    onChange={(e) => setFeedbackData({ ...feedbackData, homework: e.target.value })}
                     placeholder="Homework completion and status..."
                     rows={2}
                     className="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-[#FFC540] resize-none"
                   />
                 </div>
-                
+
                 <div>
                   <label className="block text-sm font-medium text-gray-400 mb-2">Assignments & Projects</label>
                   <textarea
                     value={feedbackData.assignments}
-                    onChange={(e) => setFeedbackData({...feedbackData, assignments: e.target.value})}
+                    onChange={(e) => setFeedbackData({ ...feedbackData, assignments: e.target.value })}
                     placeholder="Feedback on assignments and projects..."
                     rows={2}
                     className="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-[#FFC540] resize-none"
@@ -603,8 +602,8 @@ const StudentSelectionModal: React.FC<StudentSelectionModalProps> = ({
             </div>
           )}
         </div>
-        
-        <div className="flex items-center justify-end space-x-3 p-6 border-t border-gray-700">
+
+        <div className="flex items-center justify-end space-x-3 p-6 border-t border-gray-700 flex-none">
           <button
             onClick={onClose}
             className="px-4 py-2 text-gray-400 hover:text-white transition-colors duration-200"

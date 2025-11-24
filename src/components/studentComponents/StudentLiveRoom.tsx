@@ -13,8 +13,8 @@ import {
   GraduationCap,
   Mic,
   MicOff,
-  Pin,
   ScreenShare,
+  ScreenShareOff,
   Users,
   Video,
   VideoOff,
@@ -28,6 +28,7 @@ interface StoredSessionData {
   batchName?: string;
   hms?: {
     authToken?: string;
+    token?: string;
   };
   [key: string]: any;
 }
@@ -50,14 +51,14 @@ const StudentLiveRoom: React.FC = () => {
   const [hasAttemptedJoin, setHasAttemptedJoin] = useState(false);
   const [pinnedPeerId, setPinnedPeerId] = useState<string | null>(null);
   const [showParticipants, setShowParticipants] = useState(false);
-  const hadTutorBeforeRef = useRef(false);
+  const [isScreenSharing, setIsScreenSharing] = useState(false);
 
   const sessionToken = useMemo(() => {
     return localStorage.getItem('live_class_token');
   }, []);
 
   const visiblePeers = useMemo(
-    () => peers.filter((peer) => !peer.isAuxiliary && !peer.name?.toLowerCase().includes('beam')),
+    () => peers.filter(peer => !(peer as any).isAuxiliary && !/beam/i.test(peer.name)),
     [peers]
   );
 
@@ -248,6 +249,21 @@ const StudentLiveRoom: React.FC = () => {
     }
   };
 
+  const toggleScreenShare = async () => {
+    try {
+      if (isScreenSharing) {
+        await hmsActions.setScreenShareEnabled(false);
+        setIsScreenSharing(false);
+      } else {
+        await hmsActions.setScreenShareEnabled(true);
+        setIsScreenSharing(true);
+      }
+    } catch (err: any) {
+      console.error('Error toggling screen share:', err);
+      // You might want to show a toast or error message here
+    }
+  };
+
   const handleLeave = async () => {
     if (isLeaving) return;
     setIsLeaving(true);
@@ -302,25 +318,19 @@ const StudentLiveRoom: React.FC = () => {
         </div>
       </div>
 
-      <div className="video-container">
-        {remotePeers.length === 0 && !visiblePeers.some((peer) => peer.auxiliaryTracks?.length) ? (
-          <div className="no-peers">
-            <p>Waiting for class to begin...</p>
-            <p className="small">
-              If this persists, please verify the mentor has started the session.
-            </p>
-          </div>
-        ) : (
-          <>
-            {visiblePeers
-              .filter((peer) => peer.auxiliaryTracks && peer.auxiliaryTracks.length > 0)
-              .map((peer) => (
+      <div className={`video-container ${peers.some(p => p.auxiliaryTracks?.length > 0) ? 'screen-share-active' : ''}`}>
+        {/* Screen Share View */}
+        {peers.some(peer => peer.auxiliaryTracks?.length > 0) && (
+          <div className="screen-share-container">
+            {peers
+              .filter(peer => peer.auxiliaryTracks && peer.auxiliaryTracks.length > 0)
+              .map(peer => (
                 <div key={`${peer.id}-screen`} className="screen-share-main">
                   <video
                     autoPlay
                     playsInline
                     muted
-                    ref={(node) => {
+                    ref={node => {
                       if (!node) return;
                       const screenTrack = peer.auxiliaryTracks?.[0];
                       if (screenTrack) {
@@ -329,85 +339,62 @@ const StudentLiveRoom: React.FC = () => {
                         } catch (err) {
                           console.error('Failed to attach screen share track:', err);
                         }
-                      } else {
-                        node.srcObject = null;
                       }
                     }}
+                    className="screen-share-video"
                   />
-                  <div className="screen-share-label icon-text">
-                    <ScreenShare size={18} />
-                    <span>{peer.name} is sharing their screen</span>
+                  <div className="screen-share-label">
+                    <ScreenShare size={20} />
+                    <span>{peer.name}'s Screen</span>
                   </div>
                 </div>
               ))}
+          </div>
+        )}
 
-            <div className="video-grid">
-              {visiblePeers
-                .slice(0, visiblePeers.some(p => p.auxiliaryTracks?.length) ? 4 : undefined)
-                .map((peer) => {
-                  const isLocal = peer.isLocal;
-                  const isPinned = pinnedPeerId === peer.id;
+        {/* Regular Video Grid */}
+        <div className={`video-grid ${peers.some(p => p.auxiliaryTracks?.length > 0) ? 'compact' : ''}`}>
+          {visiblePeers.map((peer) => {
+            const isLocal = peer.isLocal;
+            const isPinned = pinnedPeerId === peer.id;
 
-                  const attachTrack = (node: HTMLVideoElement | null, trackId: string | undefined) => {
-                    if (!node) return;
-                    if (trackId) {
-                      try {
-                        hmsActions.attachVideo(trackId, node);
-                      } catch (err) {
-                        console.error('Failed to attach track:', err);
-                      }
-                    } else {
-                      node.srcObject = null;
+            return (
+              <div
+                key={peer.id}
+                className={`video-tile ${isPinned ? 'pinned' : ''}`}
+                onClick={() => setPinnedPeerId(isPinned ? null : peer.id)}
+              >
+                <video
+                  autoPlay
+                  playsInline
+                  muted={isLocal}
+                  ref={(node) => {
+                    if (node && peer.videoTrack) {
+                      hmsActions.attachVideo(peer.videoTrack, node);
                     }
-                  };
+                  }}
+                  className="peer-video"
+                />
 
-                  return (
-                    <div
-                      key={peer.id}
-                      className={`video-tile ${isPinned ? 'pinned' : ''}`}
-                      onClick={() => setPinnedPeerId(isPinned ? null : peer.id)}
-                      title={isPinned ? 'Unpin' : 'Pin to focus'}
-                    >
-                      <video
-                        autoPlay
-                        playsInline
-                        muted={isLocal}
-                        ref={(node) => attachTrack(node, peer.videoTrack)}
-                        className="peer-video"
-                      />
+                <div className="peer-info">
+                  <span className="peer-name">
+                    {peer.name}
+                    {peer.isLocal && ' (You)'}
+                  </span>
+                  <div className="track-status">
+                    {!peer.audioTrack && <MicOff size={14} />}
+                    {!peer.videoTrack && <VideoOff size={14} />}
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
 
-                      {/* Fallback when mentor camera is off */}
-                      {!peer.videoTrack && (
-                        <div className="no-video-fallback">
-                          <span>{peer.name?.charAt(0)?.toUpperCase() || 'P'}</span>
-                        </div>
-                      )}
-
-                      <div className="peer-info">
-                        <span className="peer-name">
-                          {peer.name}
-                          {peer.roleName === 'tutor' && (
-                            <GraduationCap size={16} className="icon-inline" />
-                          )}
-                          {peer.roleName === 'student' && peer.isLocal && ' (You)'}
-                          {isPinned && <Pin size={16} className="icon-inline" />}
-                        </span>
-                        <div className="track-debug">
-                          <span className="icon-label">
-                            {peer.audioTrack && (peer.audioTrack.enabled === undefined || peer.audioTrack.enabled !== false) ? <Mic size={14} /> : <MicOff size={14} />}
-                            <span>{peer.audioTrack && (peer.audioTrack.enabled === undefined || peer.audioTrack.enabled !== false) ? 'On' : 'Muted'}</span>
-                          </span>
-                          <span className="icon-label">
-                            {peer.videoTrack && (peer.videoTrack.enabled === undefined || peer.videoTrack.enabled !== false) ? <Video size={14} /> : <VideoOff size={14} />}
-                            <span>{peer.videoTrack && (peer.videoTrack.enabled === undefined || peer.videoTrack.enabled !== false) ? 'On' : 'Off'}</span>
-                          </span>
-                        </div>
-                      </div>
-                    </div>
-                  );
-                })}
-            </div>
-          </>
+        {visiblePeers.length === 0 && !peers.some(p => p.auxiliaryTracks?.length > 0) && (
+          <div className="no-peers">
+            <p>Waiting for class to begin...</p>
+          </div>
         )}
       </div>
 
@@ -425,6 +412,20 @@ const StudentLiveRoom: React.FC = () => {
           title={isLocalVideoEnabled ? 'Turn camera off' : 'Turn camera on'}
         >
           {isLocalVideoEnabled ? <Video size={24} /> : <VideoOff size={24} />}
+        </button>
+        <button
+          className={`control-btn ${isScreenSharing ? 'active' : ''} ${peers.some(p => p.auxiliaryTracks?.length > 0 && !p.isLocal) ? 'disabled' : ''}`}
+          onClick={toggleScreenShare}
+          disabled={peers.some(p => p.auxiliaryTracks?.length > 0 && !p.isLocal)}
+          title={
+            peers.some(p => p.auxiliaryTracks?.length > 0 && !p.isLocal)
+              ? 'Someone is already sharing their screen'
+              : isScreenSharing
+                ? 'Stop sharing screen'
+                : 'Share screen'
+          }
+        >
+          {isScreenSharing ? <ScreenShare size={24} /> : <ScreenShareOff size={24} />}
         </button>
         <button
           className={`control-btn participants-btn ${showParticipants ? 'active' : ''}`}

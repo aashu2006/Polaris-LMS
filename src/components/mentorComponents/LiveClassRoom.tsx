@@ -50,16 +50,16 @@ const LiveClassRoom: React.FC<LiveClassRoomProps> = ({ sessionData, onClose }) =
   const [connectionEstablished, setConnectionEstablished] = useState(false)
   const [showParticipants, setShowParticipants] = useState(false)
   const visiblePeers = useMemo(
-    () => peers.filter(peer => !peer.isAuxiliary && !peer.name?.toLowerCase().includes('beam')),
+    () => peers.filter(peer => !(peer as any).isAuxiliary && !/beam/i.test(peer.name)),
     [peers]
   )
 
   const joinAttemptedRef = useRef(false)
-  const connectionTimeoutRef = useRef<NodeJS.Timeout | null>(null)
-  const fallbackCheckRef = useRef<NodeJS.Timeout | null>(null)
-  const checkIntervalRef = useRef<NodeJS.Timeout | null>(null)
+  const connectionTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const fallbackCheckRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const checkIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null)
   const isConnectedRef = useRef(false)
-  const uiFallbackRef = useRef<NodeJS.Timeout | null>(null)
+  const uiFallbackRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   useEffect(() => {
     isConnectedRef.current = isConnected || false
@@ -274,7 +274,7 @@ const LiveClassRoom: React.FC<LiveClassRoomProps> = ({ sessionData, onClose }) =
         <div className="error-card">
           <h2>Error</h2>
           <p>{error}</p>
-          <button onClick={onClose} className="btn btn-primary">
+          <button onClick={() => onClose()} className="btn btn-primary">
             Close
           </button>
         </div>
@@ -306,13 +306,46 @@ const LiveClassRoom: React.FC<LiveClassRoomProps> = ({ sessionData, onClose }) =
         </div>
       </div>
 
-      <div className="video-container">
-        {visiblePeers.length === 0 ? (
+      <div className={`video-container ${peers.some(p => p.auxiliaryTracks?.length > 0) ? 'screen-share-active' : ''}`}>
+        {/* Screen Share View */}
+        {peers.some(peer => peer.auxiliaryTracks?.length > 0) && (
+          <div className="screen-share-container">
+            {peers
+              .filter(peer => peer.auxiliaryTracks && peer.auxiliaryTracks.length > 0)
+              .map(peer => (
+                <div key={`${peer.id}-screen`} className="screen-share-main">
+                  <video
+                    autoPlay
+                    playsInline
+                    muted
+                    ref={node => {
+                      if (!node) return;
+                      const screenTrack = peer.auxiliaryTracks?.[0];
+                      if (screenTrack) {
+                        try {
+                          hmsActions.attachVideo(screenTrack, node);
+                        } catch (err) {
+                          console.error('Failed to attach screen share track:', err);
+                        }
+                      }
+                    }}
+                    className="screen-share-video"
+                  />
+                  <div className="screen-share-label">
+                    <ScreenShare size={20} />
+                    <span>{peer.name}'s Screen</span>
+                  </div>
+                </div>
+              ))}
+          </div>
+        )}
+
+        {visiblePeers.length === 0 && !peers.some(p => p.auxiliaryTracks?.length > 0) ? (
           <div className="no-peers">
             <p>Waiting for students to join...</p>
           </div>
         ) : (
-          <div className="video-grid">
+          <div className={`video-grid ${peers.some(p => p.auxiliaryTracks?.length > 0) ? 'compact' : ''}`}>
             {visiblePeers.map((peer) => (
               <div key={peer.id} className="video-tile">
                 <video
@@ -362,7 +395,15 @@ const LiveClassRoom: React.FC<LiveClassRoomProps> = ({ sessionData, onClose }) =
 
         <button
           onClick={toggleScreenShare}
-          className={`control-btn ${isScreenSharing ? 'active' : ''}`}
+          className={`control-btn ${isScreenSharing ? 'active' : ''} ${peers.some(p => p.auxiliaryTracks?.length > 0 && !p.isLocal) ? 'disabled' : ''}`}
+          disabled={peers.some(p => p.auxiliaryTracks?.length > 0 && !p.isLocal)}
+          title={
+            peers.some(p => p.auxiliaryTracks?.length > 0 && !p.isLocal)
+              ? 'Someone is already sharing their screen'
+              : isScreenSharing
+                ? 'Stop sharing screen'
+                : 'Share screen'
+          }
         >
           {isScreenSharing ? <ScreenShare size={24} /> : <ScreenShareOff size={24} />}
         </button>
