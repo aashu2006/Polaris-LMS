@@ -63,36 +63,71 @@ const AuthForm: React.FC<AuthFormProps> = ({ userType, onLogin }) => {
   const handleGoogleAuth = async () => {
     setLoading(true);
     setError('');
+
     try {
-      let testEmail = '';
-      let authFunction: (token: string) => Promise<{ user: any; token: string | null }>;
-
-      switch (userType) {
-        case 'student':
-          testEmail = 'nitish.p24@medhaviskillsuniversity.edu.in';
-          authFunction = publicAuthApi.studentGoogleLogin;
-          break;
-        case 'faculty':
-          testEmail = 'ananya.sharma@polariscampus.com';
-          authFunction = publicAuthApi.facultyGoogleLogin;
-          break;
-        case 'admin':
-          testEmail = 'kshitiz.dhooria@classplus.co';
-          authFunction = publicAuthApi.adminGoogleLogin;
-          break;
+      // Initialize Google Sign-In
+      const google = (window as any).google;
+      if (!google) {
+        throw new Error('Google Sign-In library not loaded');
       }
 
-      const mockToken = `mock_google_token_for_${testEmail}`;
-      const result = await authFunction(mockToken);
-
-      if (result.token) {
-        onLogin(result.user, result.token, result.refreshToken);
-      } else {
-        throw new Error('No authentication token received');
+      // Get Google Client ID from environment
+      const clientId = import.meta.env.VITE_GOOGLE_CLIENT_ID;
+      if (!clientId) {
+        throw new Error('Google Client ID not configured');
       }
+
+      // Define callback function
+      (window as any).handleGoogleCallback = async (response: any) => {
+        try {
+          const idToken = response.credential;
+
+          // Call appropriate backend endpoint with the token
+          let authFunction;
+          switch (userType) {
+            case 'student':
+              authFunction = publicAuthApi.studentGoogleLogin;
+              break;
+            case 'faculty':
+              authFunction = publicAuthApi.facultyGoogleLogin;
+              break;
+            case 'admin':
+              authFunction = publicAuthApi.adminGoogleLogin;
+              break;
+          }
+
+          const result = await authFunction(idToken);
+
+          if (result.token) {
+            onLogin(result.user, result.token, result.refreshToken);
+          } else {
+            throw new Error('No authentication token received');
+          }
+        } catch (err: any) {
+          setError(err.message || 'Google authentication failed');
+        } finally {
+          setLoading(false);
+        }
+      };
+
+      // Initialize with simpler approach
+      google.accounts.id.initialize({
+        client_id: clientId,
+        callback: (window as any).handleGoogleCallback
+      });
+
+      // Render the button
+      google.accounts.id.renderButton(
+        document.getElementById('google-signin-button'),
+        { theme: 'outline', size: 'large', width: '100%' }
+      );
+
+      // Also try to show the One Tap prompt
+      google.accounts.id.prompt();
+
+      setLoading(false);
     } catch (err: any) {
       setError(err.message || 'Google authentication failed');
-    } finally {
       setLoading(false);
     }
   };
@@ -105,9 +140,9 @@ const AuthForm: React.FC<AuthFormProps> = ({ userType, onLogin }) => {
 
     try {
       const credentials = { email: formData.email, password: formData.password };
-      
+
       // Use appropriate auth function based on user type
-      const result = userType === 'faculty' 
+      const result = userType === 'faculty'
         ? await publicAuthApi.facultyEmailLogin(credentials)
         : await publicAuthApi.login(credentials);
 
@@ -191,6 +226,8 @@ const AuthForm: React.FC<AuthFormProps> = ({ userType, onLogin }) => {
             </svg>
             Continue with Google
           </button>
+          {/* Container for Google-rendered button */}
+          <div id="google-signin-button" className="hidden"></div>
         </div>
       )}
 
