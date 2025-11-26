@@ -18,6 +18,17 @@ export interface Program {
   } | null;
 }
 
+export interface Batch {
+  id: string;
+  name: string;
+  studentsCount?: number;
+  sessionsCount?: number;
+  academicYear?: string;
+  semester?: number;
+  type?: string | null;
+  createdAt?: string;
+}
+
 
 export interface Group {
   id: string;
