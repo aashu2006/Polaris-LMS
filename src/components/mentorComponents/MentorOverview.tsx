@@ -7,7 +7,6 @@ import MentorStudents from './MentorStudents';
 import MentorSchedule from './MentorSchedule';
 import MentorRecordings from './MentorRecordings';
 import MentorAssignments from './MentorAssignments';
-import MentorSessions from './MentorSessions';
 import MentorAnalytics from './MentorAnalytics';
 import StudentFeedbackHistory from './StudentFeedbackHistory';
 import { useAuth } from '../../contexts/AuthContext';
@@ -44,9 +43,8 @@ const MentorOverview: React.FC<MentorOverviewProps> = ({ activeSection, setActiv
 
   const tabItems = [
     { id: 'overview', label: 'Overview' },
-    { id: 'students', label: 'My Students' },
+    { id: 'students', label: 'Feedback' },
     { id: 'schedule', label: 'Schedule' },
-    { id: 'sessions', label: 'Live Sessions' },
     { id: 'assignments', label: 'Assignments' },
     { id: 'recordings', label: 'Recordings' },
     { id: 'analytics', label: 'Analytics' },
@@ -63,7 +61,7 @@ const MentorOverview: React.FC<MentorOverviewProps> = ({ activeSection, setActiv
         return (
           <>
             <MentorSummaryCards />
-            
+
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
               <div className="lg:col-span-2">
                 <UpcomingSessions />
@@ -79,8 +77,6 @@ const MentorOverview: React.FC<MentorOverviewProps> = ({ activeSection, setActiv
         return <MentorStudents />;
       case 'schedule':
         return <MentorSchedule />;
-      case 'sessions':
-        return <MentorSessions />;
       case 'recordings':
         return <MentorRecordings />;
       case 'assignments':
@@ -91,7 +87,7 @@ const MentorOverview: React.FC<MentorOverviewProps> = ({ activeSection, setActiv
         return (
           <>
             <MentorSummaryCards />
-            
+
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
               <div className="lg:col-span-2">
                 <UpcomingSessions />
@@ -120,26 +116,25 @@ const MentorOverview: React.FC<MentorOverviewProps> = ({ activeSection, setActiv
         <h1 className="text-3xl font-bold text-white">Welcome back, {displayName || 'Mentor'}!</h1>
         <p className="text-gray-400 mt-1">Here's what's happening with your students and sessions.</p>
       </div>
-      
+
       {/* Tab Navigation */}
       <div className="flex space-x-1">
         {tabItems.map((item) => (
           <button
             key={item.id}
             onClick={() => handleTabClick(item.id)}
-            className={`px-6 py-3 rounded-lg font-medium transition-all duration-200 ${
-              activeTab === item.id
-                ? 'bg-[#FFC540] text-black'
-                : 'text-gray-400 hover:text-white hover:bg-gray-700'
-            }`}
+            className={`px-6 py-3 rounded-lg font-medium transition-all duration-200 ${activeTab === item.id
+              ? 'bg-[#FFC540] text-black'
+              : 'text-gray-400 hover:text-white hover:bg-gray-700'
+              }`}
           >
             {item.label}
           </button>
         ))}
       </div>
-      
+
       {renderTabContent()}
-      
+
       <StudentFeedbackHistory
         studentId={feedbackHistoryModal.studentId || 0}
         studentName={feedbackHistoryModal.studentName}
