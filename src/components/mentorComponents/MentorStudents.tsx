@@ -64,14 +64,17 @@ const MentorStudents: React.FC = () => {
 
     // Refresh sessions every 30 seconds to get updated attendance data
     // This ensures attendance marked by webhook (50% threshold) is reflected in UI
+    // Skip refresh if feedback modal is open to prevent data loss
     const refreshInterval = setInterval(() => {
-      fetchSessions();
+      if (!feedbackModal.isOpen) {
+        fetchSessions();
+      }
     }, 30000); // 30 seconds
 
     return () => {
       clearInterval(refreshInterval);
     };
-  }, []);
+  }, [feedbackModal.isOpen]);
 
   const fetchSessions = async () => {
     if (!userId) return;
