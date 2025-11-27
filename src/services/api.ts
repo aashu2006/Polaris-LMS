@@ -198,8 +198,8 @@ async function apiRequest(url: string, options: RequestInit = {}, token?: string
   };
 
   if (token) {
-      headers['Authorization'] = `Bearer ${token}`;
-      headers['x-access-token'] = token; // Keep for backward compatibility
+    headers['Authorization'] = `Bearer ${token}`;
+    headers['x-access-token'] = token; // Keep for backward compatibility
   }
 
   const response = await fetch(url, {
@@ -720,7 +720,7 @@ const lmsApi = {
     getAll: async (token: string) => {
       // Use adminPrograms.getAllFaculties instead of non-existent mentor/list endpoint
       return lmsApiRequest(`${LMS_BASE_URL}/api/v1/admin/programs/allFaculties`, {
-          method: 'GET',
+        method: 'GET',
       }, token);
     },
 
@@ -758,7 +758,7 @@ const lmsApi = {
 
     getAllSessions: async (mentorId: string, token: string) => {
       return lmsApiRequest(`${LMS_BASE_URL}/api/v1/schedule/faculty/${mentorId}/sessions`, {
-          method: 'GET',
+        method: 'GET',
       }, token);
     },
     getFacultyStudents: async (token: string) => {
@@ -768,17 +768,17 @@ const lmsApi = {
     },
     getTotalClasses: async (token: string) => {
       return lmsApiRequest(`${LMS_BASE_URL}/api/v1/mentor/cards/total-classes`, {
-          method: 'GET',
+        method: 'GET',
       }, token);
     },
     getTotalCourses: async (token: string) => {
       return lmsApiRequest(`${LMS_BASE_URL}/api/v1/mentor/cards/total-courses`, {
-          method: 'GET',
+        method: 'GET',
       }, token);
     },
     getAvgAttendance: async (token: string) => {
       return lmsApiRequest(`${LMS_BASE_URL}/api/v1/mentor/cards/avg-attendance`, {
-          method: 'GET',
+        method: 'GET',
       }, token);
     },
 
@@ -810,6 +810,41 @@ const lmsApi = {
       }, token);
     },
   },
+
+  batches: {
+    getAllBatches: async (token: string) => {
+      return lmsApiRequest(`${LMS_BASE_URL}/api/v1/admin/batch/batches`, {
+        method: 'GET',
+      }, token);
+    },
+
+    getBatchStudents: async (batchId: string, page: number = 1, limit: number = 10, token: string) => {
+      return lmsApiRequest(`${LMS_BASE_URL}/api/v1/admin/batch/batches/${batchId}/students?page=${page}&limit=${limit}`, {
+        method: 'GET',
+      }, token);
+    },
+
+    getBatchSessions: async (batchId: string, date: string, token: string) => {
+      return lmsApiRequest(`${LMS_BASE_URL}/api/v1/admin/batch/sessions/${date}?batch_id=${batchId}`, {
+        method: 'GET',
+      }, token);
+    },
+
+    updateBatch: async (batchId: string, name: string, token: string) => {
+      return lmsApiRequest(`${LMS_BASE_URL}/api/v1/admin/batch/batches/${batchId}/update`, {
+        method: 'PUT',
+        body: JSON.stringify({ batchId, newName: name }),
+        headers: { 'Content-Type': 'application/json' },
+      }, token);
+    },
+
+    removeStudentFromBatch: async (batchId: string, studentId: string, token: string) => {
+      return lmsApiRequest(`${LMS_BASE_URL}/api/v1/admin/batch/batches/${batchId}/students/${studentId}`, {
+        method: 'DELETE',
+      }, token);
+    },
+  },
+
 
   sessions: {
     markComplete: async (sessionId: number, token: string) => {
@@ -1091,12 +1126,12 @@ const lmsApi = {
   },
 
   adminSchedule: {
-  getFacultySessions: async (facultyId: string, token: string) => {
-    return lmsApiRequest(`${LMS_BASE_URL}/api/v1/schedule/faculty/${facultyId}/sessions?limit=1000`, {
-      method: 'GET',
-    }, token);
+    getFacultySessions: async (facultyId: string, token: string) => {
+      return lmsApiRequest(`${LMS_BASE_URL}/api/v1/schedule/faculty/${facultyId}/sessions?limit=1000`, {
+        method: 'GET',
+      }, token);
+    },
   },
-},
 
 };
 
@@ -1125,7 +1160,7 @@ const multimediaApi = {
       if (facultyId) params.append('facultyId', facultyId);
       params.append('limit', limit.toString());
       params.append('offset', offset.toString());
-      
+
       return lmsApiRequest(`${MM_BASE_URL}/liveclass/session/ended?${params.toString()}`, {
         method: 'GET',
       }, token);
@@ -1386,7 +1421,7 @@ export const vodApi = {
       } catch (error: any) {
         if (error.message?.includes('multiple (or no) rows returned')) {
           console.warn(`Student ${studentId} has multiple batches, this needs backend fix`);
-          
+
           if (studentId !== '08faa382-56d6-4a7c-9482-ef6efdfa5bea') {
             console.log('Falling back to test student ID');
             return await apiRequest(
@@ -1555,6 +1590,13 @@ export const useApi = () => {
       },
       adminSchedule: {
         getFacultySessions: (facultyId: string) => lmsApi.adminSchedule.getFacultySessions(facultyId, token),
+      },
+      batches: {
+        getAllBatches: () => lmsApi.batches.getAllBatches(token),
+        getBatchStudents: (batchId: string, page: number, limit: number) => lmsApi.batches.getBatchStudents(batchId, page, limit, token),
+        getBatchSessions: (batchId: string, date: string) => lmsApi.batches.getBatchSessions(batchId, date, token),
+        updateBatch: (batchId: string, name: string) => lmsApi.batches.updateBatch(batchId, name, token),
+        removeStudentFromBatch: (batchId: string, studentId: string) => lmsApi.batches.removeStudentFromBatch(batchId, studentId, token),
       },
     },
     multimedia: {
