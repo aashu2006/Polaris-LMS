@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { Calendar, Video, FileText, Github, Award, Clock, Users, BookOpen, PlayCircle, CheckCircle, AlertCircle, Upload, X, User, ChevronDown, LogOut, Settings } from 'lucide-react';
+import { Calendar, Video, FileText, Github, Award, Clock, Users, BookOpen, PlayCircle, CheckCircle, AlertCircle, Upload, X, LogOut, User, ChevronDown } from 'lucide-react';
 
 import { useApi } from '../../services/api';
 import { useAuth } from '../../contexts/AuthContext';
@@ -124,7 +124,7 @@ const StudentProfile = () => {
   const api = useApi();
   const { user, logout } = useAuth();
   const [userBatchId, setUserBatchId] = useState<number | null>(user?.batchId || null);
-  const [showUserDropdown, setShowUserDropdown] = useState(false);
+  const [showDropdown, setShowDropdown] = useState(false);
   const [activeTab, setActiveTab] = useState<'overview' | 'schedule' | 'recordings' | 'assignments' | 'contributions'>('overview');
   const [showUploadModal, setShowUploadModal] = useState(false);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
@@ -971,93 +971,56 @@ const StudentProfile = () => {
 
   return (
     <div className="min-h-screen bg-[#0A0E1A]">
-      <nav className="bg-[#0A0E1A] border-b border-gray-800 px-8 py-4">
-        <div className="max-w-7xl mx-auto flex items-center justify-between">
-          <div className="flex items-center gap-8">
-            <div className="flex items-center gap-2">
-              <div className="w-8 h-8 rounded-lg bg-[#FFC540] flex items-center justify-center">
-                <span className="text-black font-bold text-sm">P</span>
-              </div>
-              <span className="text-white font-bold text-lg">Plarislabs <span className="text-gray-500 text-sm">2.0</span></span>
-            </div>
-            <div className="flex gap-4">
-              <button className="px-4 py-2 bg-[#FFC540] text-black rounded-lg font-medium text-sm">
-                Programs
-              </button>
-              <button className="px-4 py-2 text-gray-400 hover:text-white font-medium text-sm">
-                Mentors
-              </button>
-              <button className="px-4 py-2 text-gray-400 hover:text-white font-medium text-sm">
-                Students
-              </button>
-              <button className="px-4 py-2 text-gray-400 hover:text-white font-medium text-sm">
-                Reports
-              </button>
+
+
+      <nav className="bg-[#1a2332] border-b border-gray-800 sticky top-0 z-50">
+        <div className="max-w-7xl mx-auto px-8 py-4 flex items-center justify-between">
+          <div className="flex items-center space-x-8">
+            <div>
+              <h1 className="text-xl font-bold text-[#FFC540]">Polaris Labs</h1>
+              <p className="text-gray-400 text-sm">Student Portal</p>
             </div>
           </div>
-          <div className="flex items-center gap-4">
-            <div className="relative">
-              <input
-                type="text"
-                placeholder="Search..."
-                className="bg-[#1a2332] text-white placeholder-gray-500 px-4 py-2 rounded-lg w-64 text-sm focus:outline-none focus:ring-2 focus:ring-[#FFC540]"
-              />
-            </div>
-            <div className="relative">
-              <button className="text-gray-400 hover:text-white">
-                <div className="relative">
-                  <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
-                  </svg>
-                  <span className="absolute -top-1 -right-1 bg-[#FFC540] text-black text-xs rounded-full w-5 h-5 flex items-center justify-center font-bold">3</span>
-                </div>
-              </button>
-            </div>
-            <div className="relative">
-              <button
-                onClick={() => setShowUserDropdown(!showUserDropdown)}
-                className="flex items-center space-x-2 hover:bg-gray-800/50 rounded-lg px-3 py-2 transition-colors duration-200"
-                aria-haspopup="true"
-                aria-expanded={showUserDropdown}
-              >
-                <div className="w-8 h-8 bg-[#FFC540] rounded-full flex items-center justify-center">
-                  <User className="w-4 h-4 text-black" />
-                </div>
-                <ChevronDown className={`w-4 h-4 text-gray-400 transition-transform ${showUserDropdown ? 'rotate-180' : ''}`} />
-              </button>
 
-              {showUserDropdown && (
-                <>
-                  <div
-                    className="fixed inset-0 z-10"
-                    onClick={() => setShowUserDropdown(false)}
-                  />
+          {/* User Profile Dropdown */}
+          <div className="relative">
+            <button
+              onClick={() => setShowDropdown(!showDropdown)}
+              className="flex items-center space-x-2 hover:bg-gray-700 rounded-lg px-2 py-1 transition-colors duration-200"
+            >
+              <div className="w-8 h-8 bg-[#FFC540] rounded-full flex items-center justify-center">
+                <User className="h-4 w-4 text-black" />
+              </div>
+              <ChevronDown className="h-4 w-4 text-gray-400" />
+            </button>
 
-                  <div className="absolute right-0 mt-2 w-64 bg-[#1a2332] border border-gray-700 rounded-lg shadow-lg z-20">
-                    <div className="px-4 py-3 border-b border-gray-700">
-                      <p className="text-sm font-semibold text-white">{user?.name || 'Student'}</p>
-                      <p className="text-xs text-gray-400">{user?.email || ''}</p>
-                    </div>
+            {/* Dropdown Menu */}
+            {showDropdown && (
+              <>
+                {/* Backdrop to close dropdown */}
+                <div
+                  className="fixed inset-0 z-10"
+                  onClick={() => setShowDropdown(false)}
+                />
 
-                    <div className="py-2">
-                      <button
-                        className="w-full flex items-center space-x-3 px-4 py-2 text-left text-gray-300 hover:bg-gray-700 hover:text-white transition-colors duration-200"
-                      >
-                        <Settings className="h-4 w-4" />
-                        <span>Settings</span>
-                      </button>
-                      <button
-                        onClick={logout}
-                        className="w-full flex items-center space-x-3 px-4 py-2 text-left text-gray-300 hover:bg-gray-700 hover:text-white transition-colors duration-200"
-                      >
-                        <LogOut className="h-4 w-4" />
-                        <span>Logout</span>
-                      </button>
-                    </div>
+                <div className="absolute right-0 mt-2 w-64 bg-gray-800 border border-gray-700 rounded-lg shadow-lg z-20">
+                  <div className="px-4 py-3 border-b border-gray-700">
+                    <p className="text-sm font-semibold text-white truncate">{user?.name || 'Student'}</p>
+                    <p className="text-xs text-gray-400 truncate" title={user?.email || ''}>{user?.email || ''}</p>
                   </div>
-                </>
-              )}
-            </div>
+
+                  <div className="py-2">
+                    <button
+                      onClick={logout}
+                      className="w-full flex items-center space-x-3 px-4 py-2 text-left text-gray-300 hover:bg-gray-700 hover:text-white transition-colors duration-200"
+                    >
+                      <LogOut className="h-4 w-4" />
+                      <span>Logout</span>
+                    </button>
+                  </div>
+                </div>
+              </>
+            )}
           </div>
         </div>
       </nav>
