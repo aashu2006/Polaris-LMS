@@ -29,17 +29,18 @@ const BatchDetails: React.FC<BatchDetailsProps> = ({ batch, onBack }) => {
   useEffect(() => {
     if (activeTab === 'students') {
       fetchStudents();
-    } else {
+    } else if (activeTab === 'sessions' && selectedDate && (customBatchId?.trim() || batch.id)) {
+      // Auto-fetch sessions when date and batchId are both available
       fetchSessions();
     }
-  }, [activeTab, page, selectedDate, batch.id, customBatchId]);
+  }, [activeTab, page, batch.id, selectedDate, customBatchId]);
 
   const fetchStudents = async () => {
     try {
       setLoading(true);
       setError(null);
       const response = await api.lms.batches.getBatchStudents(batch.id, page, limit);
-
+      
       const rawStudents =
         response?.students ||
         response?.data?.students ||
@@ -92,16 +93,85 @@ const BatchDetails: React.FC<BatchDetailsProps> = ({ batch, onBack }) => {
         return;
       }
 
+      const targetBatchId = customBatchId?.trim() || batch.id;
+      if (!targetBatchId) {
+        setDateError('Batch ID is required.');
+        setSessions([]);
+        return;
+      }
+
       setLoading(true);
       setError(null);
       setDateError(null);
-      const targetBatchId = customBatchId?.trim() || batch.id;
+      
+      console.log('Fetching sessions for batch:', targetBatchId, 'date:', selectedDate);
       const response = await api.lms.batches.getBatchSessions(targetBatchId, selectedDate);
       
-      const sessionsData = response.sessions || response.data || [];
-      setSessions(sessionsData);
+      // Handle different response structures
+      let sessionsData: any[] = [];
+      if (Array.isArray(response)) {
+        sessionsData = response;
+      } else if (Array.isArray(response?.sessions)) {
+        sessionsData = response.sessions;
+      } else if (Array.isArray(response?.data)) {
+        sessionsData = response.data;
+      } else if (response?.data && Array.isArray(response.data.sessions)) {
+        sessionsData = response.data.sessions;
+      }
+      
+      // Normalize session data to ensure consistent field names
+      const normalizedSessions = sessionsData.map((session: any) => {
+        // Extract title from multiple possible field names
+        const title = session.title || 
+                     session.course_name || 
+                     session.session_title || 
+                     session.name ||
+                     session.course_code ||
+                     `Session ${session.id || ''}`;
+        
+        // Extract start time from multiple possible field names
+        const startTime = session.startTime || 
+                         session.start_time || 
+                         session.session_datetime || 
+                         session.sessionDateTime ||
+                         session.datetime;
+        
+        // Calculate end time from start time + duration (if not provided)
+        let endTime = session.endTime || session.end_time || session.endDateTime;
+        
+        if (!endTime && startTime && session.duration) {
+          try {
+            const startDate = new Date(startTime);
+            // Duration is in minutes, convert to milliseconds
+            const durationMs = (typeof session.duration === 'number' ? session.duration : parseInt(session.duration)) * 60 * 1000;
+            const endDate = new Date(startDate.getTime() + durationMs);
+            endTime = endDate.toISOString();
+          } catch (e) {
+            console.warn('Could not calculate end time:', e);
+          }
+        }
+        
+        // Extract status
+        const status = session.status || 'scheduled';
+        
+        return {
+          ...session,
+          title,
+          startTime,
+          endTime,
+          status,
+          // Keep original id
+          id: session.id || session.session_id || session.sessionId
+        };
+      });
+      
+      console.log('Sessions fetched:', normalizedSessions.length, 'Sample:', normalizedSessions[0]);
+      setSessions(normalizedSessions);
     } catch (err: any) {
-      setError(err.message || 'Failed to load sessions');
+      const errorMessage = err.message || 'Failed to load sessions';
+      setError(errorMessage);
+      setDateError(errorMessage);
+      setSessions([]);
       console.error('Error fetching sessions:', err);
     } finally {
       setLoading(false);
@@ -235,21 +305,21 @@ const BatchDetails: React.FC<BatchDetailsProps> = ({ batch, onBack }) => {
               </div>
               {totalStudents > limit && (
                 <div className="flex items-center space-x-2">
-                  <button
-                    onClick={() => setPage(p => Math.max(1, p - 1))}
-                    disabled={page === 1}
-                    className="p-2 rounded-lg bg-gray-800 text-gray-400 hover:text-white disabled:opacity-50 disabled:cursor-not-allowed"
-                  >
-                    <ChevronLeft className="w-4 h-4" />
-                  </button>
+              <button
+                onClick={() => setPage(p => Math.max(1, p - 1))}
+                disabled={page === 1}
+                className="p-2 rounded-lg bg-gray-800 text-gray-400 hover:text-white disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                <ChevronLeft className="w-4 h-4" />
+              </button>
                   <span className="text-gray-400 text-sm">Page {page}</span>
-                  <button
-                    onClick={() => setPage(p => p + 1)}
-                    disabled={students.length < limit}
-                    className="p-2 rounded-lg bg-gray-800 text-gray-400 hover:text-white disabled:opacity-50 disabled:cursor-not-allowed"
-                  >
-                    <ChevronRight className="w-4 h-4" />
-                  </button>
+              <button
+                onClick={() => setPage(p => p + 1)}
+                disabled={students.length < limit}
+                className="p-2 rounded-lg bg-gray-800 text-gray-400 hover:text-white disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                <ChevronRight className="w-4 h-4" />
+              </button>
                 </div>
               )}
             </div>
@@ -269,10 +339,10 @@ const BatchDetails: React.FC<BatchDetailsProps> = ({ batch, onBack }) => {
                 <p className="text-xs text-gray-500 mt-1">Leave blank to use the selected batch automatically.</p>
               </div>
               <div className="flex-1 w-full">
-                <label className="block text-sm font-medium text-gray-300 mb-2">Select Date</label>
-                <input
-                  type="date"
-                  value={selectedDate}
+              <label className="block text-sm font-medium text-gray-300 mb-2">Select Date</label>
+              <input
+                type="date"
+                value={selectedDate}
                   placeholder="e.g. 2025-11-25"
                   onChange={(e) => {
                     const nextValue = e.target.value;
@@ -297,26 +367,80 @@ const BatchDetails: React.FC<BatchDetailsProps> = ({ batch, onBack }) => {
             </div>
 
             <div className="space-y-4">
-              {sessions.map((session: any) => (
-                <div key={session.id || Math.random()} className="bg-gray-800/50 rounded-xl p-4 border border-gray-700/50 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-                  <div className="w-full sm:flex-1">
-                    <h3 className="text-white font-medium">{session.title || 'Untitled Session'}</h3>
-                    <div className="text-sm text-gray-400 mt-1">
-                      {session.startTime ? new Date(session.startTime).toLocaleTimeString() : 'Time N/A'} - 
-                      {session.endTime ? new Date(session.endTime).toLocaleTimeString() : 'Time N/A'}
+              {sessions.map((session: any) => {
+                // Get title from normalized field or fallback to other possible fields
+                const sessionTitle = session.title || 
+                                   session.course_name || 
+                                   session.session_title || 
+                                   session.name ||
+                                   session.course_code ||
+                                   `Session ${session.id || ''}`;
+                
+                // Format datetime for display
+                const formatTime = (timeStr: string | Date) => {
+                  if (!timeStr) return 'N/A';
+                  try {
+                    const date = typeof timeStr === 'string' ? new Date(timeStr) : timeStr;
+                    return date.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
+                  } catch {
+                    return 'N/A';
+                  }
+                };
+                
+                const startTime = session.startTime || session.start_time || session.session_datetime;
+                const endTime = session.endTime || session.end_time;
+                
+                // Get additional info from response
+                const facultyName = session.faculty_name || session.facultyName || '';
+                const venue = session.venue || '';
+                const sessionType = session.session_type || session.sessionType || '';
+                const duration = session.duration ? `${session.duration} min` : '';
+                
+                return (
+                  <div key={session.id || Math.random()} className="bg-gray-800/50 rounded-xl p-4 border border-gray-700/50">
+                    <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
+                      <div className="w-full sm:flex-1">
+                        <h3 className="text-white font-medium mb-2">{sessionTitle}</h3>
+                        <div className="space-y-1 text-sm text-gray-400">
+                          <div className="flex items-center gap-2">
+                            <span>🕐</span>
+                            <span>{formatTime(startTime)} - {formatTime(endTime)}</span>
+                            {duration && <span className="text-gray-500">({duration})</span>}
+                          </div>
+                          {facultyName && (
+                            <div className="flex items-center gap-2">
+                              <span>👤</span>
+                              <span>{facultyName}</span>
+                            </div>
+                          )}
+                          {venue && (
+                            <div className="flex items-center gap-2">
+                              <span>📍</span>
+                              <span>{venue}</span>
+                            </div>
+                          )}
+                          {sessionType && (
+                            <div className="flex items-center gap-2">
+                              <span className="text-xs px-2 py-0.5 rounded bg-gray-700/50 text-gray-300 capitalize">
+                                {sessionType}
+                              </span>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                      <div className="text-right sm:text-left sm:flex-shrink-0">
+                        <span className={`inline-flex px-2 py-1 text-xs font-medium rounded-full ${
+                          session.status === 'completed' ? 'bg-green-400/10 text-green-400' :
+                          session.status === 'scheduled' ? 'bg-blue-400/10 text-blue-400' :
+                          'bg-gray-400/10 text-gray-400'
+                        }`}>
+                          {session.status || 'Scheduled'}
+                        </span>
+                      </div>
                     </div>
                   </div>
-                  <div className="text-right">
-                    <span className={`inline-flex px-2 py-1 text-xs font-medium rounded-full ${
-                      session.status === 'completed' ? 'bg-green-400/10 text-green-400' :
-                      session.status === 'scheduled' ? 'bg-blue-400/10 text-blue-400' :
-                      'bg-gray-400/10 text-gray-400'
-                    }`}>
-                      {session.status || 'Scheduled'}
-                    </span>
-                  </div>
-                </div>
-              ))}
+                );
+              })}
               {sessions.length === 0 && (
                 <div className="text-center py-8 text-gray-500">
                   No sessions scheduled for this date

@@ -6,9 +6,10 @@ import { useApi } from '../../services/api';
 interface BatchesTableProps {
   onViewBatch: (batch: Batch) => void;
   onEditBatch: (batch: Batch) => void;
+  refreshTrigger?: number;
 }
 
-const BatchesTable: React.FC<BatchesTableProps> = ({ onViewBatch, onEditBatch }) => {
+const BatchesTable: React.FC<BatchesTableProps> = ({ onViewBatch, onEditBatch, refreshTrigger }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [sortField, setSortField] = useState<keyof Batch>('name');
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc');
@@ -58,7 +59,7 @@ const BatchesTable: React.FC<BatchesTableProps> = ({ onViewBatch, onEditBatch })
     };
 
     fetchBatches();
-  }, [api.lms.batches]);
+  }, [api.lms.batches, refreshTrigger]);
 
   const handleSort = (field: keyof Batch) => {
     if (sortField === field) {
@@ -76,10 +77,21 @@ const BatchesTable: React.FC<BatchesTableProps> = ({ onViewBatch, onEditBatch })
     .sort((a, b) => {
       const aVal = a[sortField];
       const bVal = b[sortField];
+      
+      // Handle numeric fields (semester, type)
+      if (sortField === 'semester' || sortField === 'type') {
+        const aNum = typeof aVal === 'number' ? aVal : (typeof aVal === 'string' ? parseInt(aVal) || 0 : 0);
+        const bNum = typeof bVal === 'number' ? bVal : (typeof bVal === 'string' ? parseInt(bVal) || 0 : 0);
+        return sortDirection === 'asc' ? aNum - bNum : bNum - aNum;
+      }
+      
+      // Handle string fields (name, academicYear)
+      const aStr = String(aVal || '');
+      const bStr = String(bVal || '');
       if (sortDirection === 'asc') {
-        return (aVal || '') < (bVal || '') ? -1 : (aVal || '') > (bVal || '') ? 1 : 0;
+        return aStr.localeCompare(bStr);
       } else {
-        return (aVal || '') > (bVal || '') ? -1 : (aVal || '') < (bVal || '') ? 1 : 0;
+        return bStr.localeCompare(aStr);
       }
     });
 
@@ -153,10 +165,31 @@ const BatchesTable: React.FC<BatchesTableProps> = ({ onViewBatch, onEditBatch })
                 </button>
               </th>
               <th className="px-4 sm:px-6 py-3 text-left">
-                <span className="text-xs font-medium uppercase tracking-wider text-gray-300">Students</span>
+                <button
+                  onClick={() => handleSort('academicYear')}
+                  className="flex items-center space-x-1 text-gray-300 hover:text-white transition-colors"
+                >
+                  <span className="text-xs font-medium uppercase tracking-wider">Academic Year</span>
+                  <ArrowUpDown className="w-4 h-4" />
+                </button>
               </th>
               <th className="px-4 sm:px-6 py-3 text-left">
-                <span className="text-xs font-medium uppercase tracking-wider text-gray-300">Sessions</span>
+                <button
+                  onClick={() => handleSort('type')}
+                  className="flex items-center space-x-1 text-gray-300 hover:text-white transition-colors"
+                >
+                  <span className="text-xs font-medium uppercase tracking-wider">Batch Type</span>
+                  <ArrowUpDown className="w-4 h-4" />
+                </button>
+              </th>
+              <th className="px-4 sm:px-6 py-3 text-left">
+                <button
+                  onClick={() => handleSort('semester')}
+                  className="flex items-center space-x-1 text-gray-300 hover:text-white transition-colors"
+                >
+                  <span className="text-xs font-medium uppercase tracking-wider">Semester</span>
+                  <ArrowUpDown className="w-4 h-4" />
+                </button>
               </th>
               <th className="px-4 sm:px-6 py-3 text-right">
                 <span className="text-xs font-medium uppercase tracking-wider text-gray-300">Actions</span>
@@ -172,17 +205,15 @@ const BatchesTable: React.FC<BatchesTableProps> = ({ onViewBatch, onEditBatch })
               >
                 <td className="px-4 sm:px-6 py-4">
                   <div className="text-white font-medium group-hover:text-yellow-400 transition-colors">{batch.name}</div>
-                  {batch.academicYear && (
-                    <div className="text-xs text-gray-500 mt-1">
-                      {batch.academicYear} {batch.semester ? `- Sem ${batch.semester}` : ''}
-                    </div>
-                  )}
                 </td>
                 <td className="px-4 sm:px-6 py-4">
-                  <div className="text-gray-300">{batch.studentsCount}</div>
+                  <div className="text-gray-300">{batch.academicYear || '—'}</div>
                 </td>
                 <td className="px-4 sm:px-6 py-4">
-                  <div className="text-gray-300">{batch.sessionsCount}</div>
+                  <div className="text-gray-300">{batch.type ? String(batch.type) : '—'}</div>
+                </td>
+                <td className="px-4 sm:px-6 py-4">
+                  <div className="text-gray-300">{batch.semester ? `Sem ${batch.semester}` : '—'}</div>
                 </td>
                 <td className="px-4 sm:px-6 py-4 text-right">
                   <div className="flex items-center justify-end space-x-2">
@@ -212,7 +243,7 @@ const BatchesTable: React.FC<BatchesTableProps> = ({ onViewBatch, onEditBatch })
             ))}
             {filteredBatches.length === 0 && (
               <tr>
-                <td colSpan={4} className="px-6 py-8 text-center text-gray-500">
+                <td colSpan={5} className="px-6 py-8 text-center text-gray-500">
                   No batches found
                 </td>
               </tr>

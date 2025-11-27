@@ -34,6 +34,7 @@ const Dashboard: React.FC = () => {
   const [selectedMentor, setSelectedMentor] = useState<Mentor | null>(null);
   const [selectedBatch, setSelectedBatch] = useState<Batch | null>(null);
   const [showBatchModal, setShowBatchModal] = useState(false);
+  const [batchRefreshTrigger, setBatchRefreshTrigger] = useState(0);
   const [modalMode, setModalMode] = useState<'view' | 'edit'>('view');
   const [studentModalMode, setStudentModalMode] = useState<'view' | 'edit' | 'add'>('view');
   const [mentorModalMode, setMentorModalMode] = useState<'view' | 'edit' | 'add'>('view');
@@ -368,6 +369,7 @@ const Dashboard: React.FC = () => {
               <BatchesTable
                 onViewBatch={handleViewBatch}
                 onEditBatch={handleEditBatch}
+                refreshTrigger={batchRefreshTrigger}
               />
             )}
           </div>
@@ -444,13 +446,8 @@ const Dashboard: React.FC = () => {
         onClose={handleCloseBatchModal}
         batch={selectedBatch}
         onBatchUpdated={() => {
-          // Refresh logic if needed, or rely on table to re-fetch
-          // For now, we might want to trigger a refresh in BatchesTable
-          // But since BatchesTable fetches on mount/update, closing modal might not trigger it unless we force it
-          // A simple way is to toggle view or use a refresh trigger context/prop
-          // For simplicity, we'll just close the modal, and the user might need to refresh or we can improve this later
+          setBatchRefreshTrigger(prev => prev + 1);
           handleCloseBatchModal();
-          // Ideally, we should pass a refresh callback to BatchesTable
         }}
       />
 
