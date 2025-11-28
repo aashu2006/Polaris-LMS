@@ -1358,6 +1358,29 @@ const multimediaApi = {
         method: 'GET',
       }, token);
     },
+
+    // Get isPresent data for a session from LMS admin batch attendance API
+    // Backend endpoint (LMS): /api/v1/admin/batch/attendance/:sessionId
+    // Expected response:
+    // {
+    //   success: true,
+    //   students: [
+    //     {
+    //       attendanceId: number,
+    //       userId: string,
+    //       sessionId: number,
+    //       isPresent: boolean,
+    //       student: { id: string, name: string, email: string }
+    //     },
+    //     ...
+    //   ]
+    // }
+    getBatchSessionAttendance: async (sessionId: number, token: string) => {
+      // Matches backend route: https://live-class-lms1-672553132888.asia-south1.run.app/api/v1/admin/batch/attendance/1081
+      return apiRequest(`${LMS_BASE_URL}/api/v1/admin/batch/attendance/${sessionId}`, {
+        method: 'GET',
+      }, token);
+    },
   },
 };
 
@@ -1624,6 +1647,8 @@ export const useApi = () => {
           multimediaApi.attendance.getCourseAttendance(sessionId, courseId, token, search, limit || 20, offset || 0),
         getSessionAnalytics: (sessionId: number) =>
           multimediaApi.attendance.getSessionAnalytics(sessionId, token),
+        getBatchSessionAttendance: (sessionId: number) =>
+          multimediaApi.attendance.getBatchSessionAttendance(sessionId, token),
       },
     },
     dashboard: {

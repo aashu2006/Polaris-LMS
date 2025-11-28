@@ -2,7 +2,6 @@ import React, { useState, useEffect } from 'react';
 import { Download, Loader2, ChevronDown, ChevronUp } from 'lucide-react';
 import { useApi } from '../../services/api';
 import { useAuth } from '../../contexts/AuthContext';
-import { supabase } from '../../lib/supabase';
 
 const MentorAnalytics: React.FC = () => {
   const [dateRange, setDateRange] = useState('30days');
@@ -132,9 +131,10 @@ const MentorAnalytics: React.FC = () => {
             
             // Handle actual API response structure:
             // { sessionDuration, totalCount, students: [...] }
-            // Convert to integer (no decimal points)
-            const durationSeconds = Math.floor(analytics.sessionDuration || analytics.duration || 0);
-              const hours = Math.floor(durationSeconds / 3600);
+            // API returns duration in MINUTES, convert to seconds first
+            const durationMinutes = analytics.sessionDuration || analytics.duration || 0;
+            const durationSeconds = Math.floor(durationMinutes * 60); // Convert minutes to seconds
+            const hours = Math.floor(durationSeconds / 3600);
             const remainingSeconds = durationSeconds % 3600;
             const minutes = Math.floor(remainingSeconds / 60);
             const seconds = remainingSeconds % 60;
@@ -160,21 +160,6 @@ const MentorAnalytics: React.FC = () => {
               totalStudents = session?.students?.length || session?.student_count || 0;
             }
             
-            // Calculate students present (students with totalDuration > 0 or joinedDuration > 0)
-            // If totalDuration >= sessionDuration * 0.5 (50% threshold), consider present
-            const attendanceThreshold = Math.floor(durationSeconds * 0.5);
-            const studentsPresent = analytics.students 
-              ? analytics.students.filter((s: any) => {
-                  const studentDuration = Math.floor(s.totalDuration || s.joinedDuration || 0);
-                  return studentDuration >= attendanceThreshold || s.isPresent === true;
-                }).length 
-              : 0;
-            
-            // Calculate attendance percentage (commented - not used in active UI)
-            // const attendancePercentage = totalStudents > 0
-            //   ? parseFloat(((studentsPresent / totalStudents) * 100).toFixed(2))
-            //   : 0;
-            
             // Calculate average engagement time from students (commented - not used in active UI)
             // let totalEngagementTime = 0;
             // if (analytics.students && Array.isArray(analytics.students)) {
@@ -187,64 +172,76 @@ const MentorAnalytics: React.FC = () => {
             //   : 0;
             // const engagementMinutes = Math.floor(avgEngagementSeconds / 60);
             
-            // Fetch isPresent from attendance_records (Supabase)
+            // Fetch isPresent from new LMS admin batch attendance API instead of Supabase
             let attendanceRecordsMap = new Map<string, boolean>();
             try {
-              const { data: attendanceData, error: attendanceError } = await supabase
-                .from('attendance_records')
-                .select('user_id, is_present, session_id')
-                .eq('session_id', sessionId);
-              
-              if (!attendanceError && attendanceData) {
-                attendanceData.forEach((record: any) => {
-                  attendanceRecordsMap.set(record.user_id, record.is_present);
-                });
-                console.log(`✅ Fetched ${attendanceData.length} attendance records from Supabase for sessionId ${sessionId}`);
-              } else if (attendanceError) {
-                console.warn(`⚠️ Error fetching attendance_records for sessionId ${sessionId}:`, attendanceError);
-              }
+              const attendanceResponse = await api.multimedia.attendance.getBatchSessionAttendance(sessionId);
+              const apiStudents = attendanceResponse?.students || [];
+
+              apiStudents.forEach((record: any) => {
+                // Prefer explicit userId, fall back to nested student.id
+                const userIdFromApi = record.userId || record.student?.id;
+                if (userIdFromApi) {
+                  attendanceRecordsMap.set(userIdFromApi, !!record.isPresent);
+                }
+              });
+
+              console.log(
+                `✅ Fetched ${apiStudents.length} attendance records from admin batch attendance API for sessionId ${sessionId}`
+              );
             } catch (error) {
-              console.error(`❌ Error fetching attendance_records for sessionId ${sessionId}:`, error);
+              console.error(
+                `❌ Error fetching admin batch attendance for sessionId ${sessionId}:`,
+                error
+              );
             }
             
             // Map students to expected format
+            // API returns joinedDuration in MINUTES, convert to seconds
             const mappedStudents = (analytics.students || []).map((s: any) => {
-              const studentDuration = Math.floor(s.totalDuration || s.joinedDuration || 0);
-              // Use isPresent from attendance_records if available, otherwise calculate from duration threshold
+              const studentDurationMinutes = s.joinedDuration ?? 0;
+              const studentDuration = Math.floor(studentDurationMinutes * 60); // Convert minutes to seconds
+              // Use isPresent from new admin batch attendance API only (no 50% duration logic on frontend)
               const isPresentFromRecords = attendanceRecordsMap.get(s.studentId);
-              const isPresent = isPresentFromRecords !== undefined 
-                ? isPresentFromRecords 
-                : (studentDuration >= attendanceThreshold || s.isPresent === true);
+              const isPresent = !!isPresentFromRecords;
+              
+              // Calculate attendance percentage only if both session duration and student duration are > 0
+              // If session duration is 0, return 0% (avoid division by zero)
+              // If student duration is 0, return 0% (student didn't attend)
+              let attendancePercentage = 0;
+              if (durationSeconds > 0 && studentDuration > 0) {
+                attendancePercentage = parseFloat(((studentDuration / durationSeconds) * 100).toFixed(2));
+              }
               
               return {
                 studentId: s.studentId,
                 studentName: s.studentName,
                 // imageUrl: s.imageUrl || null, // Not used in UI - commented out
                 isPresent: isPresent,
-                attendancePercentage: durationSeconds > 0 && studentDuration > 0
-                  ? parseFloat(((studentDuration / durationSeconds) * 100).toFixed(2))
-                  : 0,
-                totalDuration: studentDuration, // Integer value
+                attendancePercentage: attendancePercentage,
+                totalDuration: studentDuration, // Integer value in seconds
                 // joinedAt: s.joinedAt ? new Date(s.joinedAt) : (session.session_datetime ? new Date(session.session_datetime) : new Date()), // Not used in UI - commented out
                 // leftAt: s.leftAt ? new Date(s.leftAt) : null // Not used in UI - commented out
               };
-            });
+            }).filter((s: any) => String(s.studentId) !== String(userId));
             
             console.log('✅ Processed analytics:', {
               totalStudents,
-              studentsPresent,
+              studentsPresent: mappedStudents.filter((s: any) => s.isPresent).length,
               durationStr
             });
               
-              sessionData = {
+            const studentsPresentCount = mappedStudents.filter((s: any) => s.isPresent).length;
+
+            sessionData = {
               date: new Date(session.session_datetime).toISOString(),
               title: session.course_name || 'Session',
-              attendance: studentsPresent,
+              attendance: studentsPresentCount,
               totalStudents: totalStudents,
-                duration: durationStr,
+              duration: durationStr,
               engagement: 0, // Not calculated - not used in active UI
               attendancePercentage: 0, // Not calculated - not used in active UI
-                averageEngagementTime: 0, // Not calculated - not used in active UI
+              averageEngagementTime: 0, // Not calculated - not used in active UI
               students: mappedStudents // Mapped student data
             };
           }
