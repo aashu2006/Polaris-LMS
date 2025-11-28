@@ -1,74 +1,104 @@
 import React, { useState, useEffect } from 'react';
-import { BarChart3, TrendingUp, Download, Filter, Loader2 } from 'lucide-react';
+import { Download, Loader2, ChevronDown, ChevronUp } from 'lucide-react';
 import { useApi } from '../../services/api';
 import { useAuth } from '../../contexts/AuthContext';
+import { supabase } from '../../lib/supabase';
 
 const MentorAnalytics: React.FC = () => {
   const [dateRange, setDateRange] = useState('30days');
   const [loading, setLoading] = useState(true);
+  const [showParticipants, setShowParticipants] = useState<Set<number>>(new Set());
   const api = useApi();
   const { user } = useAuth();
   const userId = user?.id;
 
-  const [analyticsData, setAnalyticsData] = useState({
-    attendance: {
-      current: 0,
-      previous: 0,
-      trend: 'up' as 'up' | 'down',
-      data: [0, 0, 0, 0, 0, 0, 0]
-    },
-    engagement: {
-      current: 0,
-      previous: 0,
-      trend: 'up' as 'up' | 'down',
-      data: [0, 0, 0, 0, 0, 0, 0]
-    },
-    completion: {
-      current: 0,
-      previous: 0,
-      trend: 'up' as 'up' | 'down',
-      data: [0, 0, 0, 0, 0, 0, 0]
-    }
-  });
-
-  const [studentPerformance, setStudentPerformance] = useState<any[]>([]);
+  // Session-wise stats coming from multimedia session analytics API
   const [sessionStats, setSessionStats] = useState<any[]>([]);
-
   useEffect(() => {
+    console.log('🔍 MentorAnalytics useEffect triggered:', { userId, dateRange });
     if (userId) {
+      console.log('✅ userId found, calling fetchAnalyticsData');
       fetchAnalyticsData();
+    } else {
+      console.warn('⚠️ userId is missing, cannot fetch analytics');
+      setLoading(false);
     }
   }, [userId, dateRange]);
 
   const fetchAnalyticsData = async () => {
-    if (!userId) return;
+    if (!userId) {
+      console.warn('⚠️ fetchAnalyticsData: userId is missing');
+      return;
+    }
     
     try {
+      console.log('📡 Starting fetchAnalyticsData for userId:', userId);
       setLoading(true);
       
       // Fetch mentor stats and sessions
-      const [avgAttendanceResponse, sessionsResponse] = await Promise.all([
+      console.log('📡 Calling getFacultySessions API...');
+      const [, sessionsResponse] = await Promise.all([
         api.lms.mentors.getAvgAttendance(),
         api.lms.adminSchedule.getFacultySessions(userId)
       ]);
-
-      const avgAttendance = Number(avgAttendanceResponse?.average_attendance || 0);
+      console.log('✅ getFacultySessions response:', sessionsResponse);
       const sessions = sessionsResponse?.data || [];
+      console.log('📊 Sessions received:', sessions.length);
 
       // Calculate date range
       const now = new Date();
       const daysBack = dateRange === '7days' ? 7 : dateRange === '30days' ? 30 : 90;
-      const startDate = new Date(now.getTime() - daysBack * 24 * 60 * 60 * 1000);
       
-      // Filter sessions by date range
+      // Set startDate to start of day (00:00:00) for accurate date comparison
+      const startDate = new Date(now);
+      startDate.setDate(startDate.getDate() - daysBack);
+      startDate.setHours(0, 0, 0, 0);
+      
+      // Set endDate to end of today (23:59:59) for accurate date comparison
+      const endDate = new Date(now);
+      endDate.setHours(23, 59, 59, 999);
+      
+      // Filter sessions by date range (all sessions within the selected period)
       const filteredSessions = sessions.filter((s: any) => {
+        if (!s.session_datetime) return false;
         const sessionDate = new Date(s.session_datetime);
-        return sessionDate >= startDate && sessionDate <= now;
+        // Include sessions from startDate (inclusive) to endDate (inclusive)
+        return sessionDate >= startDate && sessionDate <= endDate;
       });
 
-      // Fetch session stats using getSessionAnalytics API
-      const sessionStatsPromises = filteredSessions.slice(0, 4).map(async (session: any) => {
-        const sessionId = session.id || session.session_id;
+      // Sort by date (newest first) and fetch analytics for ALL filtered sessions
+      const sortedSessions = filteredSessions.sort((a: any, b: any) => {
+        const dateA = new Date(a.session_datetime).getTime();
+        const dateB = new Date(b.session_datetime).getTime();
+        return dateB - dateA; // Descending order (newest first)
+      });
+
+      console.log('📊 Filtered sessions count:', sortedSessions.length);
+      console.log('📊 Sample session object:', sortedSessions[0]);
+      
+      // Fetch session stats using getSessionAnalytics API for all filtered sessions
+      const sessionStatsPromises = sortedSessions.map(async (session: any) => {
+        // Try multiple possible field names for sessionId
+        const rawSessionId = session.id || session.session_id || session.sessionId || session.live_session_id;
+        
+        // Convert to number if it's a string
+        const sessionId = rawSessionId ? (typeof rawSessionId === 'number' ? rawSessionId : parseInt(String(rawSessionId), 10)) : null;
+        
+        console.log(`📡 Processing session:`, {
+          sessionId,
+          rawSessionId,
+          id: session.id,
+          session_id: session.session_id,
+          sessionId_field: session.sessionId,
+          course_name: session.course_name,
+          session_datetime: session.session_datetime
+        });
+        
+        // Skip if no valid sessionId or if conversion failed
+        if (!sessionId || isNaN(sessionId)) {
+          console.warn(`⚠️ Skipping session - no valid sessionId found:`, session);
+          return null;
+        }
         
         // Default values if API fails
         let sessionData = {
@@ -84,155 +114,187 @@ const MentorAnalytics: React.FC = () => {
         };
 
         try {
-          if (sessionId) {
+          console.log(`📡 Calling getSessionAnalytics API for sessionId: ${sessionId} (type: ${typeof sessionId})`);
             // Use getSessionAnalytics API for detailed analytics
             const analyticsResponse = await api.multimedia.attendance.getSessionAnalytics(sessionId);
+          console.log(`✅ getSessionAnalytics response for sessionId ${sessionId}:`, analyticsResponse);
+          
+          // Handle API response structure: { statusCode: 200, data: { sessionDuration, totalCount, students: [...] }, message: "success" }
+          const responseData = analyticsResponse?.data || analyticsResponse;
+          if (responseData) {
+            const analytics = responseData;
             
-            if (analyticsResponse?.data) {
-              const analytics = analyticsResponse.data;
-              
-              // Format duration from seconds to hours and minutes
-              const durationSeconds = analytics.duration || 0;
+            console.log('📊 Processing analytics data:', {
+              sessionDuration: analytics.sessionDuration,
+              totalCount: analytics.totalCount,
+              studentsCount: analytics.students?.length
+            });
+            
+            // Handle actual API response structure:
+            // { sessionDuration, totalCount, students: [...] }
+            // Convert to integer (no decimal points)
+            const durationSeconds = Math.floor(analytics.sessionDuration || analytics.duration || 0);
               const hours = Math.floor(durationSeconds / 3600);
-              const minutes = Math.floor((durationSeconds % 3600) / 60);
-              const durationStr = hours > 0 ? `${hours}h ${minutes}m` : `${minutes}m`;
+            const remainingSeconds = durationSeconds % 3600;
+            const minutes = Math.floor(remainingSeconds / 60);
+            const seconds = remainingSeconds % 60;
+            
+            // Format duration with hours, minutes, and seconds
+            let durationStr = '';
+            if (hours > 0) {
+              durationStr = `${hours}h ${minutes}m ${seconds}s`;
+            } else if (minutes > 0) {
+              durationStr = `${minutes}m ${seconds}s`;
+            } else {
+              durationStr = `${seconds}s`;
+            }
 
-              // Format average engagement time
-              const avgEngagementSeconds = analytics.averageEngagementTime || 0;
-              const engagementMinutes = Math.floor(avgEngagementSeconds / 60);
+            // Get total students count from API response
+            let totalStudents = analytics.totalCount || analytics.totalStudents || 0;
+            if (totalStudents === 0 && analytics.students && Array.isArray(analytics.students)) {
+              totalStudents = analytics.students.length;
+            }
+            
+            // If still 0, use fallback from session data
+            if (totalStudents === 0) {
+              totalStudents = session?.students?.length || session?.student_count || 0;
+            }
+            
+            // Calculate students present (students with totalDuration > 0 or joinedDuration > 0)
+            // If totalDuration >= sessionDuration * 0.5 (50% threshold), consider present
+            const attendanceThreshold = Math.floor(durationSeconds * 0.5);
+            const studentsPresent = analytics.students 
+              ? analytics.students.filter((s: any) => {
+                  const studentDuration = Math.floor(s.totalDuration || s.joinedDuration || 0);
+                  return studentDuration >= attendanceThreshold || s.isPresent === true;
+                }).length 
+              : 0;
+            
+            // Calculate attendance percentage (commented - not used in active UI)
+            // const attendancePercentage = totalStudents > 0
+            //   ? parseFloat(((studentsPresent / totalStudents) * 100).toFixed(2))
+            //   : 0;
+            
+            // Calculate average engagement time from students (commented - not used in active UI)
+            // let totalEngagementTime = 0;
+            // if (analytics.students && Array.isArray(analytics.students)) {
+            //   totalEngagementTime = analytics.students.reduce((sum: number, s: any) => {
+            //     return sum + Math.floor(s.totalDuration || s.joinedDuration || 0);
+            //   }, 0);
+            // }
+            // const avgEngagementSeconds = analytics.students?.length > 0
+            //   ? Math.floor(totalEngagementTime / analytics.students.length)
+            //   : 0;
+            // const engagementMinutes = Math.floor(avgEngagementSeconds / 60);
+            
+            // Fetch isPresent from attendance_records (Supabase)
+            let attendanceRecordsMap = new Map<string, boolean>();
+            try {
+              const { data: attendanceData, error: attendanceError } = await supabase
+                .from('attendance_records')
+                .select('user_id, is_present, session_id')
+                .eq('session_id', sessionId);
+              
+              if (!attendanceError && attendanceData) {
+                attendanceData.forEach((record: any) => {
+                  attendanceRecordsMap.set(record.user_id, record.is_present);
+                });
+                console.log(`✅ Fetched ${attendanceData.length} attendance records from Supabase for sessionId ${sessionId}`);
+              } else if (attendanceError) {
+                console.warn(`⚠️ Error fetching attendance_records for sessionId ${sessionId}:`, attendanceError);
+              }
+            } catch (error) {
+              console.error(`❌ Error fetching attendance_records for sessionId ${sessionId}:`, error);
+            }
+            
+            // Map students to expected format
+            const mappedStudents = (analytics.students || []).map((s: any) => {
+              const studentDuration = Math.floor(s.totalDuration || s.joinedDuration || 0);
+              // Use isPresent from attendance_records if available, otherwise calculate from duration threshold
+              const isPresentFromRecords = attendanceRecordsMap.get(s.studentId);
+              const isPresent = isPresentFromRecords !== undefined 
+                ? isPresentFromRecords 
+                : (studentDuration >= attendanceThreshold || s.isPresent === true);
+              
+              return {
+                studentId: s.studentId,
+                studentName: s.studentName,
+                // imageUrl: s.imageUrl || null, // Not used in UI - commented out
+                isPresent: isPresent,
+                attendancePercentage: durationSeconds > 0 && studentDuration > 0
+                  ? parseFloat(((studentDuration / durationSeconds) * 100).toFixed(2))
+                  : 0,
+                totalDuration: studentDuration, // Integer value
+                // joinedAt: s.joinedAt ? new Date(s.joinedAt) : (session.session_datetime ? new Date(session.session_datetime) : new Date()), // Not used in UI - commented out
+                // leftAt: s.leftAt ? new Date(s.leftAt) : null // Not used in UI - commented out
+              };
+            });
+            
+            console.log('✅ Processed analytics:', {
+              totalStudents,
+              studentsPresent,
+              durationStr
+            });
               
               sessionData = {
-                date: new Date(analytics.startTime || session.session_datetime).toISOString(),
-                title: analytics.sessionTitle || session.course_name || 'Session',
-                attendance: analytics.studentsPresent || 0,
-                totalStudents: analytics.totalStudents || 0,
+              date: new Date(session.session_datetime).toISOString(),
+              title: session.course_name || 'Session',
+              attendance: studentsPresent,
+              totalStudents: totalStudents,
                 duration: durationStr,
-                engagement: analytics.attendancePercentage || 0, // Use attendance percentage as engagement
-                attendancePercentage: analytics.attendancePercentage || 0,
-                averageEngagementTime: engagementMinutes,
-                students: analytics.students || [] // Store student data
-              };
-            }
+              engagement: 0, // Not calculated - not used in active UI
+              attendancePercentage: 0, // Not calculated - not used in active UI
+                averageEngagementTime: 0, // Not calculated - not used in active UI
+              students: mappedStudents // Mapped student data
+            };
           }
-        } catch (err) {
-          console.error('Error fetching session analytics:', err);
+        } catch (err: any) {
+          const errorMessage = err?.message || err?.toString() || 'Unknown error';
+          const isSessionNotFound = errorMessage.toLowerCase().includes('session not found') || 
+                                   errorMessage.toLowerCase().includes('not found');
+          
+          if (isSessionNotFound) {
+            console.warn(`⚠️ Session ${sessionId} not found in backend, using fallback data`);
+          } else {
+            console.error(`❌ Error fetching session analytics for sessionId ${sessionId}:`, errorMessage);
+          }
+          
           // Fallback to basic session data if API fails
+          // sessionData already has default values, so it will be returned as is
         }
 
         return sessionData;
       });
 
+      console.log('⏳ Waiting for all session analytics promises...');
       const sessionStatsData = await Promise.all(sessionStatsPromises);
-      setSessionStats(sessionStatsData);
-
-      // Aggregate student performance data from all sessions
-      const studentMap = new Map<string, any>();
-      
-      sessionStatsData.forEach(session => {
-        if (session.students && session.students.length > 0) {
-          session.students.forEach((student: any) => {
-            const studentId = student.studentId;
-            if (!studentMap.has(studentId)) {
-              studentMap.set(studentId, {
-                name: student.studentName,
-                studentId: studentId,
-                totalSessions: 0,
-                presentSessions: 0,
-                totalAttendancePercentage: 0,
-                githubPRs: 0 // Placeholder
-              });
-            }
-            
-            const studentData = studentMap.get(studentId);
-            studentData.totalSessions += 1;
-            if (student.isPresent) {
-              studentData.presentSessions += 1;
-            }
-            studentData.totalAttendancePercentage += student.attendancePercentage || 0;
-          });
-        }
+      // Filter out null values (sessions without valid sessionId)
+      const validSessionStats = sessionStatsData.filter((data: any) => data !== null);
+      console.log('✅ All session analytics fetched:', {
+        total: sessionStatsData.length,
+        valid: validSessionStats.length,
+        skipped: sessionStatsData.length - validSessionStats.length
       });
-
-      // Calculate engagement and completion (use attendance percentage) for each student
-      const studentPerformanceData = Array.from(studentMap.values()).map(student => {
-        const attendancePercentage = student.totalSessions > 0
-          ? Math.round((student.presentSessions / student.totalSessions) * 100)
-          : 0;
-        const avgAttendancePercentage = student.totalSessions > 0
-          ? Math.round(student.totalAttendancePercentage / student.totalSessions)
-          : 0;
-
-        return {
-          name: student.name,
-          engagement: avgAttendancePercentage, // Use attendance percentage as engagement
-          completion: attendancePercentage, // Use attendance percentage as completion
-          githubPRs: student.githubPRs
-        };
-      });
-
-      setStudentPerformance(studentPerformanceData);
-
-      // Calculate engagement and completion from session analytics (use attendance percentage)
-      const sessionAttendancePercentages = sessionStatsData
-        .map(s => s.attendancePercentage || s.engagement || 0)
-        .filter(p => p > 0);
-      
-      const calculatedEngagement = sessionAttendancePercentages.length > 0
-        ? Math.round(sessionAttendancePercentages.reduce((sum, p) => sum + p, 0) / sessionAttendancePercentages.length)
-        : avgAttendance;
-      
-      const calculatedCompletion = sessionAttendancePercentages.length > 0
-        ? Math.round(sessionAttendancePercentages.reduce((sum, p) => sum + p, 0) / sessionAttendancePercentages.length)
-        : avgAttendance;
-
-      // Update analytics data - use attendance data for engagement and completion
-      setAnalyticsData({
-        attendance: {
-          current: avgAttendance,
-          previous: avgAttendance - 5, // Placeholder - can be calculated from historical data
-          trend: 'up',
-          data: Array.from({ length: 7 }, () => avgAttendance) // Simplified - can be calculated per day
-        },
-        engagement: {
-          current: calculatedEngagement, // Use attendance percentage from session analytics
-          previous: calculatedEngagement - 5,
-          trend: 'up',
-          data: Array.from({ length: 7 }, () => calculatedEngagement)
-        },
-        completion: {
-          current: calculatedCompletion, // Use attendance percentage from session analytics
-          previous: calculatedCompletion - 5,
-          trend: 'up',
-          data: Array.from({ length: 7 }, () => calculatedCompletion)
-        }
-      });
+      setSessionStats(validSessionStats);
 
     } catch (err) {
-      console.error('Error fetching analytics data:', err);
+      console.error('❌ Error in fetchAnalyticsData:', err);
     } finally {
+      console.log('🏁 fetchAnalyticsData completed');
       setLoading(false);
     }
   };
 
-  const getPerformanceColor = (value: number) => {
-    if (value >= 90) return 'text-green-600';
-    if (value >= 75) return 'text-yellow-600';
-    return 'text-red-600';
-  };
+  // If we later re-enable the detailed student table, helpers can be added back.
 
-  const getProgressColor = (value: number) => {
-    if (value >= 90) return 'bg-green-500';
-    if (value >= 75) return 'bg-yellow-400';
-    return 'bg-red-500';
+  const formatDuration = (seconds: number) => {
+    const hours = Math.floor(seconds / 3600);
+    const minutes = Math.floor((seconds % 3600) / 60);
+    const secs = seconds % 60;
+    if (hours > 0) return `${hours}h ${minutes}m ${secs}s`;
+    if (minutes > 0) return `${minutes}m ${secs}s`;
+    return `${secs}s`;
   };
-
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center h-96">
-        <Loader2 className="w-8 h-8 animate-spin text-yellow-500" />
-      </div>
-    );
-  }
 
   return (
     <div className="space-y-6">
@@ -258,8 +320,147 @@ const MentorAnalytics: React.FC = () => {
         </div>
       </div>
 
+      {/* Session Analytics Section (Real data from API – latest session) */}
+      <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+        <h2 className="text-xl font-bold text-gray-900 mb-4">Latest Session Analytics</h2>
+        {loading ? (
+          <div className="flex items-center justify-center h-40">
+            <Loader2 className="w-6 h-6 animate-spin text-yellow-500" />
+          </div>
+        ) : sessionStats.length === 0 ? (
+          <div className="text-gray-500 text-sm">No session analytics available for this period.</div>
+        ) : (
+          <div className="space-y-6">
+            {sessionStats.map((session, index) => {
+              const isExpanded = showParticipants.has(index);
+              const presentCount = session.attendance || 0;
+              const toggleParticipants = () => {
+                const newSet = new Set(showParticipants);
+                if (isExpanded) {
+                  newSet.delete(index);
+                } else {
+                  newSet.add(index);
+                }
+                setShowParticipants(newSet);
+              };
+
+              return (
+                <div key={index} className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+                  <h2 className="text-xl font-bold text-gray-900 mb-4">
+                    {session.title || `Session ${index + 1}`}
+                    {index === 0 && (
+                      <span className="ml-2 text-sm font-normal text-yellow-600 bg-yellow-50 px-2 py-1 rounded">
+                        Latest
+                      </span>
+                    )}
+                  </h2>
+                  
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-6">
+          <div className="bg-gray-50 rounded-lg p-4 border border-gray-100">
+                      <div className="text-sm text-gray-500 mb-1">Total Duration</div>
+                      <div className="text-2xl font-bold text-gray-900">
+                        {session.duration || '0m'}
+                      </div>
+          </div>
+          <div className="bg-gray-50 rounded-lg p-4 border border-gray-100">
+                      <div className="text-sm text-gray-500 mb-1">Total Students</div>
+                      <div className="text-2xl font-bold text-gray-900">{session.totalStudents || 0}</div>
+          </div>
+          <div className="bg-gray-50 rounded-lg p-4 border border-gray-100">
+                      <div className="text-sm text-gray-500 mb-1">Students Present</div>
+                      <div className="text-2xl font-bold text-gray-900">{presentCount}</div>
+          </div>
+           <div className="bg-gray-50 rounded-lg p-4 border border-gray-100">
+             <div className="text-sm text-gray-500 mb-1">Session Date</div>
+                      <div className="text-2xl font-bold text-gray-900">
+                        {new Date(session.date).toLocaleDateString()}
+                      </div>
+          </div>
+        </div>
+
+        <div className="flex items-center justify-between mb-3">
+          <h3 className="text-lg font-semibold text-gray-900">Participants List</h3>
+          <button 
+                      onClick={toggleParticipants}
+            className="flex items-center space-x-1 text-sm text-gray-600 hover:text-gray-900 focus:outline-none"
+          >
+                      <span>{isExpanded ? 'Hide' : 'Show'} List</span>
+                      {isExpanded ? (
+                        <ChevronUp className="h-4 w-4" />
+                      ) : (
+                        <ChevronDown className="h-4 w-4" />
+                      )}
+          </button>
+        </div>
+        
+                  {isExpanded && (
+          <div className="overflow-x-auto transition-all duration-300 ease-in-out">
+            <table className="w-full">
+            <thead className="bg-gray-50">
+              <tr>
+                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                              Student Name
+                            </th>
+                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                              Present
+                            </th>
+                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                              Attendance %
+                            </th>
+                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                              Duration
+                            </th>
+              </tr>
+            </thead>
+            <tbody className="bg-white divide-y divide-gray-200">
+                          {session.students && session.students.length > 0 ? (
+                            session.students.map((student: any, studentIndex: number) => (
+                              <tr key={studentIndex} className="hover:bg-gray-50">
+                                <td className="px-6 py-4 whitespace-nowrap font-medium text-gray-900">
+                                  {student.studentName || 'Unknown Student'}
+                                </td>
+                  <td className="px-6 py-4 whitespace-nowrap">
+                                  <span
+                                    className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${
+                                      student.isPresent
+                                        ? 'bg-green-100 text-green-800'
+                                        : 'bg-red-100 text-red-800'
+                                    }`}
+                                  >
+                                    {student.isPresent ? 'Present' : 'Absent'}
+                    </span>
+                                </td>
+                                <td className="px-6 py-4 whitespace-nowrap text-gray-500">
+                                  {student.attendancePercentage?.toFixed
+                                    ? student.attendancePercentage.toFixed(2)
+                                    : student.attendancePercentage || 0}
+                                  %
+                                </td>
+                                <td className="px-6 py-4 whitespace-nowrap text-gray-500">
+                                  {formatDuration(student.totalDuration || 0)}
+                                </td>
+                              </tr>
+                            ))
+                          ) : (
+                            <tr>
+                              <td colSpan={4} className="px-6 py-4 text-center text-gray-500">
+                                No participants data available
+                  </td>
+                </tr>
+                          )}
+            </tbody>
+          </table>
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+        </div>
+        )}
+      </div>
+
       {/* Key Metrics */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+      {/* <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         {Object.entries(analyticsData).map(([key, data]) => (
           <div key={key} className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
             <div className="flex items-center justify-between mb-4">
@@ -282,10 +483,10 @@ const MentorAnalytics: React.FC = () => {
             <div className="text-xs text-gray-500">vs previous period</div>
           </div>
         ))}
-      </div>
+      </div> */}
 
       {/* Student Performance Table */}
-      <div className="bg-white rounded-xl shadow-sm border border-gray-200">
+      {/* <div className="bg-white rounded-xl shadow-sm border border-gray-200">
         <div className="p-6 border-b border-gray-200">
           <div className="flex items-center justify-between">
             <h2 className="text-xl font-bold text-gray-900">Student Performance</h2>
@@ -383,10 +584,10 @@ const MentorAnalytics: React.FC = () => {
             </tbody>
           </table>
         </div>
-      </div>
+      </div> */}
 
       {/* Recent Sessions */}
-      <div className="bg-white rounded-xl shadow-sm border border-gray-200">
+      {/* <div className="bg-white rounded-xl shadow-sm border border-gray-200">
         <div className="p-6 border-b border-gray-200">
           <h2 className="text-xl font-bold text-gray-900">Recent Session Analytics</h2>
         </div>
@@ -436,7 +637,7 @@ const MentorAnalytics: React.FC = () => {
             ))}
           </div>
         </div>
-      </div>
+      </div> */}
     </div>
   );
 };

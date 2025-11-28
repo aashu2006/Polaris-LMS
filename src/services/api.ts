@@ -134,13 +134,12 @@ async function lmsApiRequest(url: string, options: RequestInit = {}, token?: str
     ...(options.headers as Record<string, string>),
   };
 
-  // Multimedia service requires token - validate it's provided
+  // Multimedia service - token is optional (some routes are unsecured like /session/analytics)
   if (url.includes('multimedia') || url.includes('mm/v3')) {
-    if (!token) {
-      throw new Error('Token not provided');
+    if (token) { // Token is now optional
+      headers['Authorization'] = `Bearer ${token}`;
+      headers['x-access-token'] = token;
     }
-    headers['Authorization'] = `Bearer ${token}`;
-    headers['x-access-token'] = token;
   } else if (token) {
     // For LMS backend, only send Authorization header
     headers['Authorization'] = `Bearer ${token}`;
