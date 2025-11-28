@@ -12,6 +12,6 @@ RUN npm run build
 
 RUN npm install -g serve
 
-EXPOSE 3303
+EXPOSE 8080
 
 CMD ["npm", "start"]
