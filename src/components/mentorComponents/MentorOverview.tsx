@@ -120,36 +120,38 @@ const MentorOverview: React.FC<MentorOverviewProps> = ({ activeSection, setActiv
   };
 
   return (
-    <div className="space-y-6 font-jakarta">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-3xl font-bold text-white">Welcome back, {displayName || 'Mentor'}!</h1>
-          <p className="text-gray-400 mt-1">Here's what's happening with your students and sessions.</p>
+    <div className="space-y-4 sm:space-y-6 font-jakarta">
+      <div className="flex items-start sm:items-center justify-between gap-2 sm:gap-4">
+        <div className="flex-1 min-w-0">
+          <h1 className="text-xl sm:text-2xl md:text-3xl font-bold text-white break-words">Welcome back, {displayName || 'Mentor'}!</h1>
+          <p className="text-gray-400 mt-1 text-sm sm:text-base">Here's what's happening with your students and sessions.</p>
         </div>
         <button
           onClick={handleRefresh}
           disabled={isRefreshing}
-          className={`p-2 rounded-lg bg-gray-800 border border-gray-700 text-gray-400 hover:text-white hover:bg-gray-700 transition-all duration-200 ${isRefreshing ? 'opacity-50 cursor-not-allowed' : ''}`}
+          className={`p-2 rounded-lg bg-gray-800 border border-gray-700 text-gray-400 hover:text-white hover:bg-gray-700 transition-all duration-200 flex-shrink-0 ${isRefreshing ? 'opacity-50 cursor-not-allowed' : ''}`}
           title="Refresh Dashboard"
         >
-          <RefreshCw className={`h-5 w-5 ${isRefreshing ? 'animate-spin' : ''}`} />
+          <RefreshCw className={`h-4 w-4 sm:h-5 sm:w-5 ${isRefreshing ? 'animate-spin' : ''}`} />
         </button>
       </div>
 
       {/* Tab Navigation */}
-      <div className="flex space-x-1">
-        {tabItems.map((item) => (
-          <button
-            key={item.id}
-            onClick={() => handleTabClick(item.id)}
-            className={`px-6 py-3 rounded-lg font-medium transition-all duration-200 ${activeTab === item.id
-              ? 'bg-[#FFC540] text-black'
-              : 'text-gray-400 hover:text-white hover:bg-gray-700'
-              }`}
-          >
-            {item.label}
-          </button>
-        ))}
+      <div className="overflow-x-auto -mx-6 px-6 sm:mx-0 sm:px-0">
+        <div className="flex space-x-1 sm:space-x-2 min-w-max sm:min-w-0">
+          {tabItems.map((item) => (
+            <button
+              key={item.id}
+              onClick={() => handleTabClick(item.id)}
+              className={`px-3 py-2 sm:px-4 sm:py-2.5 md:px-6 md:py-3 rounded-lg text-xs sm:text-sm md:text-base font-medium transition-all duration-200 whitespace-nowrap flex-shrink-0 ${activeTab === item.id
+                ? 'bg-[#FFC540] text-black'
+                : 'text-gray-400 hover:text-white hover:bg-gray-700'
+                }`}
+            >
+              {item.label}
+            </button>
+          ))}
+        </div>
       </div>
 
       {renderTabContent()}
