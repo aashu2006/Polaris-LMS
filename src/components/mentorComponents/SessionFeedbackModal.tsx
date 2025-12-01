@@ -35,15 +35,15 @@ const SessionFeedbackModal: React.FC<SessionFeedbackModalProps> = ({ isOpen, onC
   const [students, setStudents] = useState<SessionStudent[]>([]);
   const [studentFeedbacks, setStudentFeedbacks] = useState<Record<string, StudentFeedback>>({});
 
-  // Session-level feedback state (original form)
-  const [formData, setFormData] = useState({
-    performance_rating: 5,
-    area_for_improvement: '',
-    overall_performance: '',
-    strengh: '',
-    homework: '',
-    assignments: ''
-  });
+  // Session-level feedback state (original form) – commented out, kept only for reference
+  // const [formData, setFormData] = useState({
+  //   performance_rating: 5,
+  //   area_for_improvement: '',
+  //   overall_performance: '',
+  //   strengh: '',
+  //   homework: '',
+  //   assignments: ''
+  // });
 
   const [notification, setNotification] = useState<{ type: 'success' | 'error', message: string } | null>(null);
 
@@ -86,9 +86,10 @@ const SessionFeedbackModal: React.FC<SessionFeedbackModalProps> = ({ isOpen, onC
     fetchStudents();
   }, [isOpen, session]);
 
-  const handleChange = (field: string, value: string | number) => {
-    setFormData(prev => ({ ...prev, [field]: value }));
-  };
+  // Session-level change handler (no longer used, kept only for reference)
+  // const handleChange = (field: string, value: string | number) => {
+  //   setFormData(prev => ({ ...prev, [field]: value }));
+  // };
 
   const handleStudentFeedbackChange = (
     studentId: string, 
@@ -112,29 +113,29 @@ const SessionFeedbackModal: React.FC<SessionFeedbackModalProps> = ({ isOpen, onC
       const rawSessionId = session.id || session.session_id || session.sessionId || session.live_session_id;
       const sessionId = typeof rawSessionId === 'number' ? rawSessionId : Number(rawSessionId);
       
-      // 1. Submit session-level feedback (original form with all fields)
-      const sessionFeedbackPayload = {
-        user_id: mentorId,
-        session_id: sessionId,
-        student_id: 0,
-        performance_rating: formData.performance_rating,
-        area_for_improvement: formData.area_for_improvement,
-        overall_performance: formData.overall_performance,
-        strengh: formData.strengh,
-        homework: formData.homework,
-        assignments: formData.assignments,
-        feedback_type: "daily"
-      };
+      // Session-level payload (commented out, kept only for reference)
+      // const sessionFeedbackPayload = {
+      //   user_id: mentorId,
+      //   session_id: sessionId,
+      //   student_id: 0,
+      //   performance_rating: formData.performance_rating,
+      //   area_for_improvement: formData.area_for_improvement,
+      //   overall_performance: formData.overall_performance,
+      //   strengh: formData.strengh,
+      //   homework: formData.homework,
+      //   assignments: formData.assignments,
+      //   feedback_type: "daily"
+      // };
+      //
+      // await api.lms.mentors.submitFeedback(sessionFeedbackPayload);
+      // console.log('✅ Session-level feedback submitted successfully');
       
-      await api.lms.mentors.submitFeedback(sessionFeedbackPayload);
-      console.log('✅ Session-level feedback submitted successfully');
-      
-      // 2. Submit feedback for each student (only 2 fields + rest empty strings)
+      // Submit feedback for each student (only 2 fields + rest empty strings)
       const studentFeedbackPromises = Object.values(studentFeedbacks).map(feedback => {
         const payload = {
           user_id: feedback.student_id,
           session_id: sessionId,
-          student_id: feedback.student_id,
+          // student_id: feedback.student_id, // not required in daily student feedback payload
           performance_rating: feedback.performance_rating,
           overall_performance: feedback.overall_performance,
           area_for_improvement: "",
@@ -205,15 +206,15 @@ const SessionFeedbackModal: React.FC<SessionFeedbackModalProps> = ({ isOpen, onC
         )}
 
         <form onSubmit={handleSubmit} className="space-y-4 sm:space-y-6">
-          {/* Session Info */}
-          <div className="bg-slate-700/50 rounded-lg p-3 sm:p-4">
+          {/* Session Info (hidden per requirement) */}
+          {/* <div className="bg-slate-700/50 rounded-lg p-3 sm:p-4">
             <div className="flex items-center gap-2 text-sm text-slate-300">
               <span className="font-semibold">Session ID:</span>
               <span>{session.id || session.session_id || session.sessionId || session.live_session_id || 'N/A'}</span>
             </div>
-          </div>
+          </div> */}
 
-          {/* Session-Level Feedback Form (Original) */}
+          {/* Session-Level Feedback Form (commented out, kept only for reference)
           <div className="bg-slate-700/30 rounded-lg p-4 sm:p-5 border border-slate-600">
             <h3 className="text-base sm:text-lg font-semibold text-slate-200 mb-4 flex items-center gap-2">
               <User className="w-5 h-5 text-yellow-500" />
@@ -221,7 +222,6 @@ const SessionFeedbackModal: React.FC<SessionFeedbackModalProps> = ({ isOpen, onC
             </h3>
             
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3 sm:gap-4">
-              {/* Performance Rating */}
               <div>
                 <label className="block text-xs sm:text-sm font-medium text-slate-400 mb-1 sm:mb-2">
                   Performance Rating
@@ -240,7 +240,6 @@ const SessionFeedbackModal: React.FC<SessionFeedbackModalProps> = ({ isOpen, onC
                 </select>
               </div>
 
-              {/* Area for Improvement */}
               <div>
                 <label className="block text-xs sm:text-sm font-medium text-slate-400 mb-1 sm:mb-2">
                   Area for Improvement
@@ -254,7 +253,6 @@ const SessionFeedbackModal: React.FC<SessionFeedbackModalProps> = ({ isOpen, onC
                 />
               </div>
 
-              {/* Overall Performance */}
               <div>
                 <label className="block text-xs sm:text-sm font-medium text-slate-400 mb-1 sm:mb-2">
                   Overall Performance
@@ -268,7 +266,6 @@ const SessionFeedbackModal: React.FC<SessionFeedbackModalProps> = ({ isOpen, onC
                 />
               </div>
 
-              {/* Strengths */}
               <div>
                 <label className="block text-xs sm:text-sm font-medium text-slate-400 mb-1 sm:mb-2">
                   Strengths
@@ -282,7 +279,6 @@ const SessionFeedbackModal: React.FC<SessionFeedbackModalProps> = ({ isOpen, onC
                 />
               </div>
 
-              {/* Homework */}
               <div>
                 <label className="block text-xs sm:text-sm font-medium text-slate-400 mb-1 sm:mb-2">
                   Homework
@@ -296,7 +292,6 @@ const SessionFeedbackModal: React.FC<SessionFeedbackModalProps> = ({ isOpen, onC
                 />
               </div>
 
-              {/* Assignments */}
               <div>
                 <label className="block text-xs sm:text-sm font-medium text-slate-400 mb-1 sm:mb-2">
                   Assignments
@@ -311,8 +306,9 @@ const SessionFeedbackModal: React.FC<SessionFeedbackModalProps> = ({ isOpen, onC
               </div>
             </div>
           </div>
+          */}
 
-          {/* Students List Section (Below Original Form) */}
+          {/* Students List Section */}
           <div className="bg-slate-700/30 rounded-lg p-4 sm:p-5 border border-slate-600">
             <h3 className="text-base sm:text-lg font-semibold text-slate-200 mb-4 flex items-center gap-2">
               <Users className="w-5 h-5 text-yellow-500" />
