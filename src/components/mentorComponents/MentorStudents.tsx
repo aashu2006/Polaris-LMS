@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from 'react';
-import { Calendar, Clock, Users, Plus } from 'lucide-react';
+import { Calendar, Clock, Users, Plus, CalendarCheck } from 'lucide-react';
 import { useApi } from '../../services/api';
 import { useAuth } from '../../contexts/AuthContext';
 import SessionFeedbackModal from './SessionFeedbackModal';
+import WeeklyFeedbackModal from './WeeklyFeedbackModal';
 
 interface SessionStudent {
   enrollment_id: number;
@@ -36,10 +37,17 @@ const MentorStudents: React.FC = () => {
 
   const [isFeedbackModalOpen, setIsFeedbackModalOpen] = useState(false);
   const [selectedSession, setSelectedSession] = useState<SessionData | null>(null);
+  const [isWeeklyFeedbackModalOpen, setIsWeeklyFeedbackModalOpen] = useState(false);
 
   const { user } = useAuth();
   const userId = user?.id;
   const api = useApi();
+
+  const isFeedbackModalOpenRef = React.useRef(isFeedbackModalOpen);
+
+  useEffect(() => {
+    isFeedbackModalOpenRef.current = isFeedbackModalOpen;
+  }, [isFeedbackModalOpen]);
 
   useEffect(() => {
     console.log('MentorStudents mounted');
@@ -51,7 +59,7 @@ const MentorStudents: React.FC = () => {
     // This ensures attendance marked by webhook (50% threshold) is reflected in UI
     // Skip refresh if feedback modal is open to prevent data loss
     const refreshInterval = setInterval(() => {
-      if (!isFeedbackModalOpen) {
+      if (!isFeedbackModalOpenRef.current) {
         fetchSessions();
       }
     }, 30000); // 30 seconds
@@ -59,7 +67,7 @@ const MentorStudents: React.FC = () => {
     return () => {
       clearInterval(refreshInterval);
     };
-  }, [isFeedbackModalOpen]);
+  }, []);
 
   const fetchSessions = async () => {
     if (!userId) return;
@@ -118,6 +126,26 @@ const MentorStudents: React.FC = () => {
         </div>
       </div>
 
+      {/* Weekly Feedback Button */}
+      <div className="bg-gradient-to-r from-yellow-500/10 to-yellow-600/10 rounded-xl border border-yellow-500/30 p-6">
+        <div className="flex items-center justify-between">
+          <div>
+            <h2 className="text-xl font-bold text-white mb-2 flex items-center gap-2">
+              <CalendarCheck className="w-6 h-6 text-yellow-500" />
+              Weekly Feedback
+            </h2>
+            <p className="text-gray-400 text-sm">Submit general weekly performance feedback</p>
+          </div>
+          <button
+            onClick={() => setIsWeeklyFeedbackModalOpen(true)}
+            className="flex items-center space-x-2 bg-yellow-500 text-black px-6 py-3 rounded-lg hover:bg-yellow-400 transition-colors duration-200 font-semibold"
+          >
+            <Plus className="h-5 w-5" />
+            <span>Add Weekly Feedback</span>
+          </button>
+        </div>
+      </div>
+
       {/* Previous Sessions */}
       <div className="bg-gray-800 rounded-xl border border-gray-700 p-6">
         <h2 className="text-xl font-bold text-white mb-4">Previous Sessions (Last 7 Days)</h2>
@@ -164,12 +192,21 @@ const MentorStudents: React.FC = () => {
         )}
       </div>
 
-      {/* Feedback Modal */}
+      {/* Session Feedback Modal */}
       {isFeedbackModalOpen && selectedSession && userId && (
         <SessionFeedbackModal
           isOpen={isFeedbackModalOpen}
           onClose={closeFeedbackModal}
           session={selectedSession}
+          mentorId={userId}
+        />
+      )}
+
+      {/* Weekly Feedback Modal */}
+      {isWeeklyFeedbackModalOpen && userId && (
+        <WeeklyFeedbackModal
+          isOpen={isWeeklyFeedbackModalOpen}
+          onClose={() => setIsWeeklyFeedbackModalOpen(false)}
           mentorId={userId}
         />
       )}
