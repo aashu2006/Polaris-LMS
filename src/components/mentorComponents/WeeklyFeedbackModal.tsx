@@ -38,14 +38,15 @@ const WeeklyFeedbackModal: React.FC<WeeklyFeedbackModalProps> = ({ isOpen, onClo
   const [students, setStudents] = useState<SessionStudent[]>([]);
   const [studentFeedbacks, setStudentFeedbacks] = useState<Record<string, StudentFeedback>>({});
 
-  const [formData, setFormData] = useState({
-    performance_rating: 5,
-    area_for_improvement: '',
-    overall_performance: '',
-    strengh: '',
-    homework: '',
-    assignments: ''
-  });
+  // Weekly mentor-level feedback state – commented out, kept only for reference
+  // const [formData, setFormData] = useState({
+  //   performance_rating: 5,
+  //   area_for_improvement: '',
+  //   overall_performance: '',
+  //   strengh: '',
+  //   homework: '',
+  //   assignments: ''
+  // });
 
   const [notification, setNotification] = useState<{ type: 'success' | 'error', message: string } | null>(null);
 
@@ -110,9 +111,10 @@ const WeeklyFeedbackModal: React.FC<WeeklyFeedbackModalProps> = ({ isOpen, onClo
     fetchStudents();
   }, [isOpen, mentorId]);
 
-  const handleChange = (field: string, value: string | number) => {
-    setFormData(prev => ({ ...prev, [field]: value }));
-  };
+  // Weekly mentor-level change handler (no longer used)
+  // const handleChange = (field: string, value: string | number) => {
+  //   setFormData(prev => ({ ...prev, [field]: value }));
+  // };
 
   const handleStudentFeedbackChange = (
     studentId: string, 
@@ -133,30 +135,29 @@ const WeeklyFeedbackModal: React.FC<WeeklyFeedbackModalProps> = ({ isOpen, onClo
     setLoading(true);
     setNotification(null);
     try {
-      // 1. Submit weekly feedback (mentor-level with session_id: null)
-      const weeklyFeedbackPayload = {
-        user_id: mentorId,
-        session_id: null,
-        student_id: 0,
-        performance_rating: formData.performance_rating,
-        area_for_improvement: formData.area_for_improvement,
-        overall_performance: formData.overall_performance,
-        strengh: formData.strengh,
-        homework: formData.homework,
-        assignments: formData.assignments,
-        feedback_type: "weekly"
-      };
-      
-      console.log('📤 Submitting weekly feedback payload:', weeklyFeedbackPayload);
-      await api.lms.mentors.submitFeedback(weeklyFeedbackPayload);
-      console.log('✅ Weekly feedback submitted successfully');
+      // 1. Weekly mentor-level feedback payload – commented out (only student feedback will be submitted)
+      // const weeklyFeedbackPayload = {
+      //   user_id: mentorId,
+      //   session_id: null,
+      //   performance_rating: formData.performance_rating,
+      //   area_for_improvement: formData.area_for_improvement,
+      //   overall_performance: formData.overall_performance,
+      //   strengh: formData.strengh,
+      //   homework: formData.homework,
+      //   assignments: formData.assignments,
+      //   feedback_type: "weekly"
+      // };
+      //
+      // console.log('📤 Submitting weekly feedback payload:', weeklyFeedbackPayload);
+      // await api.lms.mentors.submitFeedback(weeklyFeedbackPayload);
+      // console.log('✅ Weekly feedback submitted successfully');
       
       // 2. Submit feedback for each student (all 6 fields)
       const studentFeedbackPromises = Object.values(studentFeedbacks).map(feedback => {
         const payload = {
           user_id: feedback.student_id,
           session_id: null,
-          student_id: feedback.student_id,
+          // student_id: feedback.student_id, // not required in weekly student feedback payload
           performance_rating: feedback.performance_rating,
           overall_performance: feedback.overall_performance,
           area_for_improvement: feedback.area_for_improvement,
@@ -228,7 +229,7 @@ const WeeklyFeedbackModal: React.FC<WeeklyFeedbackModalProps> = ({ isOpen, onClo
         )}
 
         <form onSubmit={handleSubmit} className="space-y-4 sm:space-y-6">
-          {/* Weekly Feedback Form */}
+          {/* Weekly Feedback Form – commented out, kept only for reference
           <div className="bg-slate-700/30 rounded-lg p-4 sm:p-5 border border-slate-600">
             <h3 className="text-base sm:text-lg font-semibold text-slate-200 mb-4 flex items-center gap-2">
               <User className="w-5 h-5 text-yellow-500" />
@@ -236,7 +237,6 @@ const WeeklyFeedbackModal: React.FC<WeeklyFeedbackModalProps> = ({ isOpen, onClo
             </h3>
             
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3 sm:gap-4">
-              {/* Performance Rating */}
               <div>
                 <label className="block text-xs sm:text-sm font-medium text-slate-400 mb-1 sm:mb-2">
                   Performance Rating
@@ -255,7 +255,6 @@ const WeeklyFeedbackModal: React.FC<WeeklyFeedbackModalProps> = ({ isOpen, onClo
                 </select>
               </div>
 
-              {/* Area for Improvement */}
               <div>
                 <label className="block text-xs sm:text-sm font-medium text-slate-400 mb-1 sm:mb-2">
                   Area for Improvement
@@ -269,7 +268,6 @@ const WeeklyFeedbackModal: React.FC<WeeklyFeedbackModalProps> = ({ isOpen, onClo
                 />
               </div>
 
-              {/* Overall Performance */}
               <div>
                 <label className="block text-xs sm:text-sm font-medium text-slate-400 mb-1 sm:mb-2">
                   Overall Performance
@@ -283,7 +281,6 @@ const WeeklyFeedbackModal: React.FC<WeeklyFeedbackModalProps> = ({ isOpen, onClo
                 />
               </div>
 
-              {/* Strengths */}
               <div>
                 <label className="block text-xs sm:text-sm font-medium text-slate-400 mb-1 sm:mb-2">
                   Strengths
@@ -297,7 +294,6 @@ const WeeklyFeedbackModal: React.FC<WeeklyFeedbackModalProps> = ({ isOpen, onClo
                 />
               </div>
 
-              {/* Homework */}
               <div>
                 <label className="block text-xs sm:text-sm font-medium text-slate-400 mb-1 sm:mb-2">
                   Homework
@@ -311,7 +307,6 @@ const WeeklyFeedbackModal: React.FC<WeeklyFeedbackModalProps> = ({ isOpen, onClo
                 />
               </div>
 
-              {/* Assignments */}
               <div>
                 <label className="block text-xs sm:text-sm font-medium text-slate-400 mb-1 sm:mb-2">
                   Assignments
@@ -326,6 +321,7 @@ const WeeklyFeedbackModal: React.FC<WeeklyFeedbackModalProps> = ({ isOpen, onClo
               </div>
             </div>
           </div>
+          */}
 
           {/* Students List Section (Below Weekly Form) */}
           <div className="bg-slate-700/30 rounded-lg p-4 sm:p-5 border border-slate-600">
