@@ -17,17 +17,24 @@ import QuickActions from '../components/adminComponents/QuickActions';
 import ProgramModal from '../components/adminComponents/ProgramModal';
 import StudentModal from '../components/adminComponents/StudentModal';
 import MentorModal from '../components/adminComponents/MentorModal';
-import type { Program, Student, Mentor, Group } from '../types';
 import GroupModal from '../components/adminComponents/GroupModel';
+import BatchesTable from '../components/adminComponents/BatchesTable';
+import BatchDetails from '../components/adminComponents/BatchDetails';
+import BatchModal from '../components/adminComponents/BatchModal';
+import type { Program, Student, Mentor, Group, Batch } from '../types';
 
 const Dashboard: React.FC = () => {
   const { user } = useAuth();
   const api = useApi();
-  const [currentView, setCurrentView] = useState<'dashboard' | 'programs' | 'groups' | 'students' | 'mentors' | 'reports' | 'alerts'>('dashboard');
+  const [currentView, setCurrentView] = useState<'dashboard' | 'programs' | 'groups' | 'students' | 'mentors' | 'reports' | 'alerts' | 'batches'>('dashboard');
   const [selectedProgram, setSelectedProgram] = useState<Program | null>(null);
   const [selectedGroup, setSelectedGroup] = useState<Group | null>(null);
   const [selectedStudent, setSelectedStudent] = useState<Student | null>(null);
+
   const [selectedMentor, setSelectedMentor] = useState<Mentor | null>(null);
+  const [selectedBatch, setSelectedBatch] = useState<Batch | null>(null);
+  const [showBatchModal, setShowBatchModal] = useState(false);
+  const [batchRefreshTrigger, setBatchRefreshTrigger] = useState(0);
   const [modalMode, setModalMode] = useState<'view' | 'edit'>('view');
   const [studentModalMode, setStudentModalMode] = useState<'view' | 'edit' | 'add'>('view');
   const [mentorModalMode, setMentorModalMode] = useState<'view' | 'edit' | 'add'>('view');
@@ -140,6 +147,20 @@ const Dashboard: React.FC = () => {
     handleAddMentor();
   };
 
+  const handleViewBatch = (batch: Batch) => {
+    setSelectedBatch(batch);
+  };
+
+  const handleEditBatch = (batch: Batch) => {
+    setSelectedBatch(batch);
+    setShowBatchModal(true);
+  };
+
+  const handleCloseBatchModal = () => {
+    setShowBatchModal(false);
+    setSelectedBatch(null);
+  };
+
   const handleCreateProgram = () => {
     setSelectedProgram(null);
     setModalMode('edit');
@@ -228,17 +249,17 @@ const Dashboard: React.FC = () => {
         onNotificationClick={handleNotificationClick}
       />
 
-      <main className="max-w-8xl mx-auto px-8 py-12">
-        <div className="mb-12">
-          <h1 className="text-4xl font-bold text-white mb-3 bg-gradient-to-r from-white to-gray-300 bg-clip-text text-transparent">
+      <main className="max-w-8xl mx-auto px-4 sm:px-8 py-6 sm:py-12">
+        <div className="mb-8 sm:mb-12">
+          <h1 className="text-2xl sm:text-4xl font-bold text-white mb-3 bg-gradient-to-r from-white to-gray-300 bg-clip-text text-transparent">
             Welcome back, {user?.name || 'Admin'}
           </h1>
-          <p className="text-gray-400 text-lg font-medium">
+          <p className="text-gray-400 text-sm sm:text-lg font-medium">
             Here's what's happening with your learning programs today.
           </p>
 
           {/* View Toggle */}
-          <div className="flex items-center space-x-2 mt-8 p-2 bg-gray-900/50 rounded-2xl border border-gray-800/50 backdrop-blur-sm w-fit">
+          <div className="flex items-center space-x-2 mt-6 sm:mt-8 p-2 bg-gray-900/50 rounded-2xl border border-gray-800/50 backdrop-blur-sm w-full sm:w-fit overflow-x-auto whitespace-nowrap scrollbar-hide">
             <button
               onClick={() => setCurrentView('dashboard')}
               className={`px-6 py-3 rounded-xl font-semibold transition-all duration-200 ${
@@ -258,6 +279,16 @@ const Dashboard: React.FC = () => {
               }`}
             >
               Programs
+            </button>
+            <button
+              onClick={() => setCurrentView('batches')}
+              className={`px-6 py-3 rounded-xl font-semibold transition-all duration-200 ${
+                currentView === 'batches'
+                  ? 'bg-yellow-500 text-black shadow-lg shadow-yellow-500/25'
+                  : 'text-gray-300 hover:text-white hover:bg-gray-800/50'
+              }`}
+            >
+              Batches
             </button>
             <button
               onClick={() => setCurrentView('students')}
@@ -311,7 +342,7 @@ const Dashboard: React.FC = () => {
               onCreateGroup={handleCreateGroup}
               onBulkUpload={handleBulkUpload}
             />
-            <div className="grid grid-cols-1 xl:grid-cols-3 gap-8">
+            <div className="grid grid-cols-1 xl:grid-cols-3 gap-6 sm:gap-8">
               <div className="xl:col-span-2">
                 <ProgramDashboard />
               </div>
@@ -326,6 +357,21 @@ const Dashboard: React.FC = () => {
               onViewProgram={handleViewProgram}
               onEditProgram={handleEditProgram}
             />
+          </div>
+        ) : currentView === 'batches' ? (
+          <div className="mb-12">
+            {selectedBatch && !showBatchModal ? (
+              <BatchDetails
+                batch={selectedBatch}
+                onBack={() => setSelectedBatch(null)}
+              />
+            ) : (
+              <BatchesTable
+                onViewBatch={handleViewBatch}
+                onEditBatch={handleEditBatch}
+                refreshTrigger={batchRefreshTrigger}
+              />
+            )}
           </div>
         ) : currentView === 'groups' ? (
           <div className="mb-12">
@@ -392,6 +438,16 @@ const Dashboard: React.FC = () => {
         onRevoke={handleRevokeMentor}
         onMentorUpdated={() => {
           // Refresh mentor data - this will trigger a re-render of MentorTable
+        }}
+      />
+
+      <BatchModal
+        isOpen={showBatchModal}
+        onClose={handleCloseBatchModal}
+        batch={selectedBatch}
+        onBatchUpdated={() => {
+          setBatchRefreshTrigger(prev => prev + 1);
+          handleCloseBatchModal();
         }}
       />
 

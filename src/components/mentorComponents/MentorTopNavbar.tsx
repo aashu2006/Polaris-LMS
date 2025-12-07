@@ -133,54 +133,59 @@ const MentorTopNavbar: React.FC<MentorTopNavbarProps> = ({ activeSection: _activ
 
   return (
     <header className="bg-gray-800 border-b border-gray-700">
-      <div className="px-6 py-4">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center space-x-8">
-            <div>
-              <h1 className="text-xl font-bold text-[#FFC540]">Polaris Labs</h1>
-              <p className="text-gray-400 text-sm">Mentor Portal</p>
+      <div className="px-3 sm:px-4 md:px-6 py-2 sm:py-3 md:py-4">
+        <div className="flex items-center justify-between gap-2 sm:gap-4">
+          <div className="flex items-center space-x-2 sm:space-x-4 md:space-x-8 flex-shrink-0 min-w-0">
+            <div className="min-w-0">
+              <h1 className="text-base sm:text-lg md:text-xl font-bold text-[#FFC540] truncate">Polaris Labs</h1>
+              <p className="text-gray-400 text-xs sm:text-sm hidden sm:block">Mentor Portal</p>
             </div>
           </div>
 
-          <div className="flex items-center space-x-6">
-            <div className="relative">
+          <div className="flex items-center space-x-1 sm:space-x-2 md:space-x-4 lg:space-x-6 flex-shrink-0">
+            {/* Search - Hidden on mobile, visible on tablet+ */}
+            <div className="hidden md:block relative">
               <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
               <input
                 type="text"
-                placeholder="Search students, sessions, recordings..."
-                className="pl-10 pr-4 py-2 bg-gray-700 border border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#FFC540] focus:border-transparent text-white placeholder-gray-400 w-64"
+                placeholder="Search students, sessions..."
+                className="pl-10 pr-4 py-2 bg-gray-700 border border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#FFC540] focus:border-transparent text-white placeholder-gray-400 w-48 lg:w-64 text-sm"
               />
             </div>
 
+            {/* Schedule Session Button - Hidden text on mobile */}
             <button
               onClick={openScheduleModal}
-              className="flex items-center space-x-2 bg-[#FFC540] text-black px-4 py-2 rounded-lg hover:bg-[#e6b139] transition-colors duration-200"
+              className="flex items-center space-x-1 sm:space-x-2 bg-[#FFC540] text-black px-2 sm:px-3 md:px-4 py-1.5 sm:py-2 rounded-lg hover:bg-[#e6b139] transition-colors duration-200 text-xs sm:text-sm font-medium"
             >
-              <Calendar className="h-4 w-4" />
-              <span>Schedule Session</span>
+              <Calendar className="h-3 w-3 sm:h-4 sm:w-4" />
+              <span className="hidden sm:inline">Schedule Session</span>
+              <span className="sm:hidden">Schedule</span>
             </button>
 
-            <button className="relative p-2 text-gray-400 hover:text-white transition-colors duration-200">
-              <Bell className="h-5 w-5" />
-              <span className="absolute -top-1 -right-1 h-4 w-4 bg-red-500 text-white text-xs rounded-full flex items-center justify-center">
+            {/* Notifications */}
+            <button className="relative p-1.5 sm:p-2 text-gray-400 hover:text-white transition-colors duration-200">
+              <Bell className="h-4 w-4 sm:h-5 sm:w-5" />
+              <span className="absolute -top-0.5 -right-0.5 sm:-top-1 sm:-right-1 h-3 w-3 sm:h-4 sm:w-4 bg-red-500 text-white text-[10px] sm:text-xs rounded-full flex items-center justify-center font-medium">
                 2
               </span>
             </button>
 
-            <button className="p-2 text-gray-400 hover:text-white transition-colors duration-200">
-              <Settings className="h-5 w-5" />
+            {/* Settings - Hidden on mobile */}
+            <button className="hidden sm:block p-1.5 sm:p-2 text-gray-400 hover:text-white transition-colors duration-200">
+              <Settings className="h-4 w-4 sm:h-5 sm:w-5" />
             </button>
 
             {/* User Profile Dropdown */}
             <div className="relative">
               <button
                 onClick={() => setShowDropdown(!showDropdown)}
-                className="flex items-center space-x-2 hover:bg-gray-700 rounded-lg px-2 py-1 transition-colors duration-200"
+                className="flex items-center space-x-1 sm:space-x-2 hover:bg-gray-700 rounded-lg px-1.5 sm:px-2 py-1 transition-colors duration-200"
               >
-                <div className="w-8 h-8 bg-[#FFC540] rounded-full flex items-center justify-center">
-                  <User className="h-4 w-4 text-black" />
+                <div className="w-7 h-7 sm:w-8 sm:h-8 bg-[#FFC540] rounded-full flex items-center justify-center">
+                  <User className="h-3 w-3 sm:h-4 sm:w-4 text-black" />
                 </div>
-                <ChevronDown className="h-4 w-4 text-gray-400" />
+                <ChevronDown className="h-3 w-3 sm:h-4 sm:w-4 text-gray-400 hidden sm:block" />
               </button>
 
               {/* Dropdown Menu */}
@@ -192,18 +197,18 @@ const MentorTopNavbar: React.FC<MentorTopNavbarProps> = ({ activeSection: _activ
                     onClick={() => setShowDropdown(false)}
                   />
 
-                  <div className="absolute right-0 mt-2 w-64 bg-gray-800 border border-gray-700 rounded-lg shadow-lg z-20">
-                    <div className="px-4 py-3 border-b border-gray-700">
-                      <p className="text-sm font-semibold text-white">{user?.name || 'Mentor'}</p>
-                      <p className="text-xs text-gray-400">{user?.email || ''}</p>
+                  <div className="absolute right-0 mt-2 w-56 sm:w-64 bg-gray-800 border border-gray-700 rounded-lg shadow-lg z-20">
+                    <div className="px-3 sm:px-4 py-2 sm:py-3 border-b border-gray-700">
+                      <p className="text-xs sm:text-sm font-semibold text-white">{user?.name || 'Mentor'}</p>
+                      <p className="text-[10px] sm:text-xs text-gray-400 truncate">{user?.email || ''}</p>
                     </div>
 
-                    <div className="py-2">
+                    <div className="py-1 sm:py-2">
                       <button
                         onClick={handleLogout}
-                        className="w-full flex items-center space-x-3 px-4 py-2 text-left text-gray-300 hover:bg-gray-700 hover:text-white transition-colors duration-200"
+                        className="w-full flex items-center space-x-2 sm:space-x-3 px-3 sm:px-4 py-1.5 sm:py-2 text-left text-xs sm:text-sm text-gray-300 hover:bg-gray-700 hover:text-white transition-colors duration-200"
                       >
-                        <LogOut className="h-4 w-4" />
+                        <LogOut className="h-3 w-3 sm:h-4 sm:w-4" />
                         <span>Logout</span>
                       </button>
                     </div>
