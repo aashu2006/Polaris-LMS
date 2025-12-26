@@ -1133,6 +1133,28 @@ const lmsApi = {
   },
 
 };
+// admin analytics endpoints
+const adminAnalytics = {
+  getMentorAnalytics: async (
+    token: string,
+    start_date?: string,
+    end_date?: string,
+    page?: number,  
+    limit?: number
+  ) => {
+    const query =
+      start_date && end_date
+        ? `?start_date=${start_date}&end_date=${end_date}`
+        : `?page=${page || 1}&limit=${limit || 10}`;
+    return lmsApiRequest(
+      `${LMS_BASE_URL}/api/v1/admin/mentorStats/total-lectures${query}`,
+      {
+        method: "GET",
+      },
+      token
+    );
+  },
+};
 
 // Multimedia API functions
 const getMMBaseURL = () => {
@@ -1654,6 +1676,10 @@ export const useApi = () => {
     dashboard: {
       getSummaryStats: () => dashboardApi.getSummaryStats(token),
       getRecentActivities: () => dashboardApi.getRecentActivities(token),
+    },
+    adminAnalyticsReport: {
+      getMentorAnalytics: (start_date?: string, end_date?: string, page?: number, limit?: number) =>
+        adminAnalytics.getMentorAnalytics(token, start_date, end_date, page, limit),
     },
   }), [token, refreshToken]);
 
