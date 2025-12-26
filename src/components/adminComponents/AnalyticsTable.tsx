@@ -69,9 +69,9 @@ export const DUMMY_ANALYTICS_DATA: MentorAnalytics[] = [
 export default function AnalyticsTable({
   onViewAnalytics,
 }: {
-  onViewAnalytics?: (mentor: MentorAnalytics) => void;
+  onViewAnalytics?: (analytics: {mentor_id: string, start_date: string, end_date: string}) => void;
 }) {
-  const { adminAnalyticsReport } = useApi();
+  const { adminAnalytics } = useApi();
 
 
   const [analyticsData, setAnalyticsData] = useState<MentorAnalytics[]>([]);
@@ -102,7 +102,7 @@ export default function AnalyticsTable({
       setLoading(true);
       setError(null);
 
-      const response = await adminAnalyticsReport.getMentorAnalytics(
+      const response = await adminAnalytics.mentorsAnalytics(
         start_date,
         end_date,
         page,
@@ -243,7 +243,7 @@ export default function AnalyticsTable({
             {filteredData.map((mentor) => (
               <tr
                 key={mentor.mentor_id}
-                onClick={() => onViewAnalytics?.(mentor)}
+                onClick={() => onViewAnalytics?.({mentor_id:mentor.mentor_id,start_date:startDate,end_date:endDate})}
                 className="hover:bg-gray-800/30 cursor-pointer"
               >
                 <td className="px-6 py-4 text-white">
@@ -258,15 +258,13 @@ export default function AnalyticsTable({
         </table>
       </div>
 
-      {/* Pagination */}
-    {/* Pagination */}
+
 <div className="flex items-center justify-between px-6 py-4 border-t border-gray-800/50">
   <p className="text-sm text-gray-400">
     Page {currentPage} of {totalPages} ({totalCount} records)
   </p>
 
   <div className="flex items-center gap-1">
-    {/* Prev */}
     <button
       disabled={!hasPreviousPage}
       onClick={() => setCurrentPage((p) => p - 1)}

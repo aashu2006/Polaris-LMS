@@ -52,7 +52,7 @@ const Dashboard: React.FC = () => {
   const [showAnalyticsModal, setShowAnalyticsModal] = useState(false);
   const [analyticsModalMode, setAnalyticsModalMode] = useState<'view' | 'edit'>('view');
 
-  const handleViewAnalytics = (analytics: MentorAnalytics) => {
+  const handleViewAnalytics = (analytics: {mentor_id: string, start_date: string, end_date: string}) => {
     setSelectedAnalytics(analytics);
     setAnalyticsModalMode('view');
     setShowAnalyticsModal(true);

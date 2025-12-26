@@ -1,11 +1,19 @@
 import { X } from "lucide-react";
-import type { MentorAnalytics } from "../../types";
+import { useEffect, useState } from "react";
+import { useApi } from "../../services/api";
 
 interface AnalyticsModalProps {
   isOpen: boolean;
   onClose: () => void;
-  analytics: MentorAnalytics | null;
+  analytics: {mentor_id: string, start_date: string , end_date: string};
   mode?: "view" | "edit";
+}
+interface Lecture {
+  lecture_id: number;
+  lecture_name: string;
+  lecture_date: Date;
+  duration: number;
+  students_present: number;
 }
 
 const AnalyticsModal: React.FC<AnalyticsModalProps> = ({
@@ -13,7 +21,28 @@ const AnalyticsModal: React.FC<AnalyticsModalProps> = ({
   onClose,
   analytics,
 }) => {
-  if (!isOpen || !analytics) return null;
+    const { adminAnalytics} = useApi();
+    const {mentor_id,start_date,end_date}=analytics||{};
+
+    const [lecturesData,setLecturesData]=useState<Lecture[]>([]);
+
+    async function fetchMentorLectures(mentor_id: string, start_date: string, end_date: string) {
+        try {
+            const response=await adminAnalytics.lecturesAnalytics(mentor_id, start_date, end_date);
+            if (response?.success) {
+                // Handle the successful response
+                console.log("Lectures Data:", response.data);
+                setLecturesData(response.data);
+            }
+        } catch (error) {
+            
+        }
+    }
+    useEffect(()=>{
+        fetchMentorLectures(mentor_id,start_date,end_date);
+    },[mentor_id,start_date,end_date]);
+    
+  if (!isOpen || !mentor_id) return null;
 
   return (
     <div className="fixed inset-0 z-50 overflow-y-auto">
@@ -29,7 +58,7 @@ const AnalyticsModal: React.FC<AnalyticsModalProps> = ({
           </div>
 
           <div className="px-10 py-8 space-y-6 max-h-[80vh] overflow-y-auto">
-            {analytics?.lectures && analytics.lectures.length > 0 ? (
+            {lecturesData?.length > 0 ? (
               <div className="overflow-x-auto">
                 <table className="w-full border border-gray-700 rounded-xl overflow-hidden">
                   <thead className="bg-gray-800">
@@ -42,7 +71,7 @@ const AnalyticsModal: React.FC<AnalyticsModalProps> = ({
                   </thead>
 
                   <tbody className="divide-y divide-gray-700">
-                    {analytics.lectures.map((lecture) => (
+                    {lecturesData.map((lecture) => (
                       <tr
                         key={lecture.lecture_id}
                         className="bg-gray-900 hover:bg-gray-800 transition"
