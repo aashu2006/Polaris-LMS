@@ -4,66 +4,6 @@ import { useApi } from "../../services/api";
 import type { MentorAnalytics } from "../../types";
 
 
-export const DUMMY_ANALYTICS_DATA: MentorAnalytics[] = [
-  {
-    mentor_id: "1",
-    mentor_name: "Ankit Singh",
-    mentor_email: "ankit.singh@demo.com",
-    lectures: [],
-    lecture_count: 0,
-  },
-  {
-    mentor_id: "2",
-    mentor_name: "Sankalp Jha",
-    mentor_email: "sankalp.jha@demo.com",
-    lectures: [
-      {
-        lecture_id: 1706,
-        lecture_name: "Google Summer Of Code",
-        lecture_date: "2025-12-15T20:00:00+05:30",
-        duration: 60,
-        students_present: 1,
-      },
-      {
-        lecture_id: 1699,
-        lecture_name: "Google Summer Of Code",
-        lecture_date: "2025-12-14T19:15:00+05:30",
-        duration: 60,
-        students_present: 1,
-      },
-    ],
-    lecture_count: 2,
-  },
-  {
-    mentor_id: "3",
-    mentor_name: "Rohit Verma",
-    mentor_email: "rohit.verma@demo.com",
-    lectures: [
-      {
-        lecture_id: 1706,
-        lecture_name: "Google Summer Of Code",
-        lecture_date: "2025-12-15T20:00:00+05:30",
-        duration: 60,
-        students_present: 1,
-      },
-      {
-        lecture_id: 1699,
-        lecture_name: "Google Summer Of Code",
-        lecture_date: "2025-12-14T19:15:00+05:30",
-        duration: 60,
-        students_present: 1,
-      },
-    ],
-    lecture_count: 2,
-  },
-  {
-    mentor_id: "4",
-    mentor_name: "Ananya Sharma",
-    mentor_email: "ananya.sharma@demo.com",
-    lectures: [],
-    lecture_count: 0,
-  },
-];
 
 
 export default function AnalyticsTable({
@@ -119,12 +59,10 @@ export default function AnalyticsTable({
         setHasNextPage(response?.pagination?.hasNextPage);
         setHasPreviousPage(response?.pagination?.hasPreviousPage);
       } else {
-        setAnalyticsData(DUMMY_ANALYTICS_DATA);
         setError("Showing demo data (invalid API response)");
       }
     } catch {
-      setAnalyticsData(DUMMY_ANALYTICS_DATA);
-      setError("Showing demo data (API unavailable)");
+      setError("Unable to fetch analytics.");
     } finally {
       setLoading(false);
     }
