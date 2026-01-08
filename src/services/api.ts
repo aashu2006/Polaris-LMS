@@ -1133,6 +1133,41 @@ const lmsApi = {
   },
 
 };
+// admin analytics endpoints
+const adminAnalytics = {
+  getMentorAnalytics: async (
+    token: string,
+    start_date?: string,
+    end_date?: string,
+    page?: number,  
+    limit?: number
+  ) => {
+    const query =
+      start_date && end_date
+        ? `?start_date=${start_date}&end_date=${end_date}`
+        : `?page=${page || 1}&limit=${limit || 10}`;
+    return lmsApiRequest(
+      `${LMS_BASE_URL}/api/v1/admin/mentorStats/total-lectures${query}`,
+      {
+        method: "GET",
+      },
+      token
+    );
+  },
+  getSelectedMentorAnalytics: async (
+    token: string,
+    mentor_id: string,
+    start_date:string,
+    end_date:string)=>{
+      return lmsApiRequest(
+        `${LMS_BASE_URL}/api/v1/admin/mentorStats/${mentor_id}/lectures?start_date=${start_date}&end_date=${end_date}`,
+        {
+          method: "GET",
+        },
+        token
+      );
+    }
+};
 
 // Multimedia API functions
 const getMMBaseURL = () => {
@@ -1655,6 +1690,13 @@ export const useApi = () => {
       getSummaryStats: () => dashboardApi.getSummaryStats(token),
       getRecentActivities: () => dashboardApi.getRecentActivities(token),
     },
+    adminAnalytics: {
+      mentorsAnalytics: (start_date?: string, end_date?: string, page?: number, limit?: number) =>
+        adminAnalytics.getMentorAnalytics(token, start_date, end_date, page, limit),
+      lecturesAnalytics: (mentor_id: string, start_date:string, end_date:string) =>
+        adminAnalytics.getSelectedMentorAnalytics(token, mentor_id, start_date, end_date),
+    },
+
   }), [token, refreshToken]);
 
   return apiFunctions;

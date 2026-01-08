@@ -80,3 +80,19 @@ export interface NotificationItem {
   timestamp: string;
   read: boolean;
 }
+
+export interface Lecture {
+  lecture_id: number;
+  lecture_name: string;
+  lecture_date: string;
+  duration: number;
+  students_present: number;
+}
+
+export interface MentorAnalytics {
+  mentor_id: string;
+  mentor_name: string;
+  mentor_email: string;
+  lecture_count: number;
+  lectures?: Lecture[];
+}

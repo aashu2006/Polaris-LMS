@@ -21,12 +21,15 @@ import GroupModal from '../components/adminComponents/GroupModel';
 import BatchesTable from '../components/adminComponents/BatchesTable';
 import BatchDetails from '../components/adminComponents/BatchDetails';
 import BatchModal from '../components/adminComponents/BatchModal';
-import type { Program, Student, Mentor, Group, Batch } from '../types';
+import AnalyticsTable from '../components/adminComponents/AnalyticsTable';
+import type { Program, Student, Mentor, Group, Batch, MentorAnalytics } from '../types';
+import AnalyticsModal from '../components/adminComponents/AnalyticsModal';
+
 
 const Dashboard: React.FC = () => {
   const { user } = useAuth();
   const api = useApi();
-  const [currentView, setCurrentView] = useState<'dashboard' | 'programs' | 'groups' | 'students' | 'mentors' | 'reports' | 'alerts' | 'batches'>('dashboard');
+  const [currentView, setCurrentView] = useState<'dashboard' | 'programs' | 'groups' | 'students' | 'mentors' | 'reports' | 'alerts' | 'analytics'| 'batches'>('dashboard');
   const [selectedProgram, setSelectedProgram] = useState<Program | null>(null);
   const [selectedGroup, setSelectedGroup] = useState<Group | null>(null);
   const [selectedStudent, setSelectedStudent] = useState<Student | null>(null);
@@ -45,6 +48,15 @@ const Dashboard: React.FC = () => {
   const [showMentorModal, setShowMentorModal] = useState(false);
   const [showRevokeConfirm, setShowRevokeConfirm] = useState(false);
   const [mentorToRevoke, setMentorToRevoke] = useState<Mentor | null>(null);
+  const [selectedAnalytics, setSelectedAnalytics] = useState<any>(null);
+  const [showAnalyticsModal, setShowAnalyticsModal] = useState(false);
+  const [analyticsModalMode, setAnalyticsModalMode] = useState<'view' | 'edit'>('view');
+
+  const handleViewAnalytics = (analytics: {mentor_id: string, start_date: string, end_date: string}) => {
+    setSelectedAnalytics(analytics);
+    setAnalyticsModalMode('view');
+    setShowAnalyticsModal(true);
+  };
 
   const handleViewProgram = (program: Program) => {
     setSelectedProgram(program);
@@ -330,6 +342,16 @@ const Dashboard: React.FC = () => {
             >
               Alerts
             </button>
+            <button
+              onClick={() => setCurrentView('analytics')}
+              className={`px-6 py-3 rounded-xl font-semibold transition-all duration-200 ${
+                currentView === 'analytics'
+                  ? 'bg-yellow-500 text-black shadow-lg shadow-yellow-500/25'
+                  : 'text-gray-300 hover:text-white hover:bg-gray-800/50'
+              }`}
+            >
+              Analytics
+            </button>
           </div>
         </div>
 
@@ -406,6 +428,10 @@ const Dashboard: React.FC = () => {
           <CustomReports />
         ) : currentView === 'alerts' ? (
           <AlertsPanel />
+        ) : currentView === 'analytics' ? (
+          <AnalyticsTable
+            onViewAnalytics={handleViewAnalytics}
+          />
         ) : null}
       </main>
 
@@ -450,6 +476,14 @@ const Dashboard: React.FC = () => {
           handleCloseBatchModal();
         }}
       />
+
+      <AnalyticsModal
+        isOpen={showAnalyticsModal}
+        onClose={() => setShowAnalyticsModal(false)}
+        analytics={selectedAnalytics}
+        mode={analyticsModalMode}
+      />
+
 
       {/* Revoke Confirmation Modal */}
       {showRevokeConfirm && mentorToRevoke && (
