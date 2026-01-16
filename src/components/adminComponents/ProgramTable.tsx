@@ -1,17 +1,29 @@
-import React, { useState, useEffect } from 'react';
-import { Search, Eye, CreditCard as Edit, MoreVertical, ArrowUpDown, Filter, Loader2, AlertCircle } from 'lucide-react';
-import type { Program } from '../../types';
-import { useApi } from '../../services/api';
+import React, { useState, useEffect } from "react";
+import {
+  Search,
+  Eye,
+  CreditCard as Edit,
+  MoreVertical,
+  ArrowUpDown,
+  Filter,
+  Loader2,
+  AlertCircle,
+} from "lucide-react";
+import type { Program } from "../../types";
+import { useApi } from "../../services/api";
 
 interface ProgramTableProps {
   onViewProgram: (program: Program) => void;
   onEditProgram: (program: Program) => void;
 }
 
-const ProgramTable: React.FC<ProgramTableProps> = ({ onViewProgram, onEditProgram }) => {
-  const [searchTerm, setSearchTerm] = useState('');
-  const [sortField, setSortField] = useState<keyof Program>('name');
-  const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc');
+const ProgramTable: React.FC<ProgramTableProps> = ({
+  onViewProgram,
+  onEditProgram,
+}) => {
+  const [searchTerm, setSearchTerm] = useState("");
+  const [sortField, setSortField] = useState<keyof Program>("name");
+  const [sortDirection, setSortDirection] = useState<"asc" | "desc">("asc");
   const [showFilters, setShowFilters] = useState(false);
   const [programs, setPrograms] = useState<Program[]>([]);
   const [loading, setLoading] = useState(true);
@@ -26,67 +38,81 @@ const ProgramTable: React.FC<ProgramTableProps> = ({ onViewProgram, onEditProgra
 
         // Get programs from Live LMS backend
         const programsData = await api.lms.adminPrograms.getProgramStats();
-        
         // Transform the data to match our Program interface
-        const transformedPrograms: Program[] = programsData.data.map((program: any, index: number) => {
-          return {
-            id: `${program.program_id}-${program.cohort}-${index}` || Math.random().toString(),
-            name: program.program_name || 'Unknown Program',
-            cohort: program.cohort || 'No Batch Assigned',
-            mentors: program.mentors_count || 0,
-            sessions: program.sessions_count || 0,
-            status: program.status === 'Active' ? 'active' : 'inactive',
-            startDate: program.start_date || 'N/A',
-            endDate: program.end_date || 'N/A'
-          };
-        });
+        const transformedPrograms: Program[] = programsData.data.map(
+          (program: any, index: number) => {
+            return {
+              id:
+                `${program.program_id}-${program.cohort}-${index}` ||
+                Math.random().toString(),
+              name: program.program_name || "Unknown Program",
+              cohort: program.cohort || "No Batch Assigned",
+              mentors_count: program.mentors_count || 0,
+              sessions: program.sessions_count || 0,
+              status: program.status === "Active" ? "active" : "inactive",
+              startDate: program.start_date || "N/A",
+              endDate: program.end_date || "N/A",
+              mentors: program.mentors || [],
+              originalProgramId: program.program_id || "",
+              batchId: program.batch_id || "",
+            };
+          }
+        );
 
         setPrograms(transformedPrograms);
       } catch (err: any) {
-        setError(err.message || 'Failed to load programs');
+        setError(err.message || "Failed to load programs");
 
         // Fallback to mock data if API fails
         setPrograms([
           {
-            id: '1',
-            name: 'Full Stack Development',
-            cohort: 'Cohort 2024-A',
-            mentors: 8,
+            id: "1",
+            name: "Full Stack Development",
+            cohort: "Cohort 2024-A",
+            mentors: [],
             sessions: 45,
-            status: 'active',
-            startDate: '2024-01-15',
-            endDate: '2024-06-15'
+            status: "active",
+            startDate: "2024-01-15",
+            endDate: "2024-06-15",
+            mentors_count: 0,
+            originalProgramId: "",
           },
           {
-            id: '2',
-            name: 'Data Science Bootcamp',
-            cohort: 'Cohort 2024-B',
-            mentors: 6,
+            id: "2",
+            name: "Data Science Bootcamp",
+            cohort: "Cohort 2024-B",
+            mentors: [],
             sessions: 38,
-            status: 'active',
-            startDate: '2024-02-01',
-            endDate: '2024-07-01'
+            status: "active",
+            startDate: "2024-02-01",
+            endDate: "2024-07-01",
+            mentors_count: 0,
+            originalProgramId: "",
           },
           {
-            id: '3',
-            name: 'UI/UX Design Fundamentals',
-            cohort: 'Cohort 2024-C',
-            mentors: 4,
+            id: "3",
+            name: "UI/UX Design Fundamentals",
+            cohort: "Cohort 2024-C",
+            mentors: [],
             sessions: 32,
-            status: 'completed',
-            startDate: '2024-01-01',
-            endDate: '2024-04-30'
+            status: "completed",
+            startDate: "2024-01-01",
+            endDate: "2024-04-30",
+            mentors_count: 0,
+            originalProgramId: "",
           },
           {
-            id: '4',
-            name: 'Machine Learning Advanced',
-            cohort: 'Cohort 2024-D',
-            mentors: 10,
+            id: "4",
+            name: "Machine Learning Advanced",
+            cohort: "Cohort 2024-D",
+            mentors: [],
             sessions: 42,
-            status: 'inactive',
-            startDate: '2024-03-01',
-            endDate: '2024-08-01'
-          }
+            status: "inactive",
+            startDate: "2024-03-01",
+            endDate: "2024-08-01",
+            mentors_count: 0,
+            originalProgramId: "",
+          },
         ]);
       } finally {
         setLoading(false);
@@ -98,34 +124,47 @@ const ProgramTable: React.FC<ProgramTableProps> = ({ onViewProgram, onEditProgra
 
   const handleSort = (field: keyof Program) => {
     if (sortField === field) {
-      setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc');
+      setSortDirection(sortDirection === "asc" ? "desc" : "asc");
     } else {
       setSortField(field);
-      setSortDirection('asc');
+      setSortDirection("asc");
     }
   };
 
   const filteredPrograms = programs
-    .filter(program =>
-      program.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      program.cohort.toLowerCase().includes(searchTerm.toLowerCase())
+    .filter(
+      (program) =>
+        program.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        program.cohort.toLowerCase().includes(searchTerm.toLowerCase())
     )
     .sort((a, b) => {
       const aVal = a[sortField];
       const bVal = b[sortField];
-      if (sortDirection === 'asc') {
-        return (aVal || '') < (bVal || '') ? -1 : (aVal || '') > (bVal || '') ? 1 : 0;
+      if (sortDirection === "asc") {
+        return (aVal || "") < (bVal || "")
+          ? -1
+          : (aVal || "") > (bVal || "")
+          ? 1
+          : 0;
       } else {
-        return (aVal || '') > (bVal || '') ? -1 : (aVal || '') < (bVal || '') ? 1 : 0;
+        return (aVal || "") > (bVal || "")
+          ? -1
+          : (aVal || "") < (bVal || "")
+          ? 1
+          : 0;
       }
     });
 
-  const getStatusColor = (status: Program['status']) => {
+  const getStatusColor = (status: Program["status"]) => {
     switch (status) {
-      case 'active': return 'text-green-400 bg-green-400/10';
-      case 'inactive': return 'text-gray-400 bg-gray-400/10';
-      case 'completed': return 'text-yellow-400 bg-yellow-400/10';
-      default: return 'text-gray-400 bg-gray-400/10';
+      case "active":
+        return "text-green-400 bg-green-400/10";
+      case "inactive":
+        return "text-gray-400 bg-gray-400/10";
+      case "completed":
+        return "text-yellow-400 bg-yellow-400/10";
+      default:
+        return "text-gray-400 bg-gray-400/10";
     }
   };
 
@@ -198,33 +237,45 @@ const ProgramTable: React.FC<ProgramTableProps> = ({ onViewProgram, onEditProgra
             <tr>
               <th className="px-6 py-3 text-left">
                 <button
-                  onClick={() => handleSort('name')}
+                  onClick={() => handleSort("name")}
                   className="flex items-center space-x-1 text-gray-300 hover:text-white transition-colors"
                 >
-                  <span className="text-xs font-medium uppercase tracking-wider">Program</span>
+                  <span className="text-xs font-medium uppercase tracking-wider">
+                    Program
+                  </span>
                   <ArrowUpDown className="w-4 h-4" />
                 </button>
               </th>
               <th className="px-6 py-3 text-left">
                 <button
-                  onClick={() => handleSort('cohort')}
+                  onClick={() => handleSort("cohort")}
                   className="flex items-center space-x-1 text-gray-300 hover:text-white transition-colors"
                 >
-                  <span className="text-xs font-medium uppercase tracking-wider">Cohort</span>
+                  <span className="text-xs font-medium uppercase tracking-wider">
+                    Cohort
+                  </span>
                   <ArrowUpDown className="w-4 h-4" />
                 </button>
               </th>
               <th className="px-6 py-3 text-left">
-                <span className="text-xs font-medium uppercase tracking-wider text-gray-300">Mentors</span>
+                <span className="text-xs font-medium uppercase tracking-wider text-gray-300">
+                  Mentors
+                </span>
               </th>
               <th className="px-6 py-3 text-left">
-                <span className="text-xs font-medium uppercase tracking-wider text-gray-300">Sessions</span>
+                <span className="text-xs font-medium uppercase tracking-wider text-gray-300">
+                  Sessions
+                </span>
               </th>
               <th className="px-6 py-3 text-left">
-                <span className="text-xs font-medium uppercase tracking-wider text-gray-300">Status</span>
+                <span className="text-xs font-medium uppercase tracking-wider text-gray-300">
+                  Status
+                </span>
               </th>
               <th className="px-6 py-3 text-right">
-                <span className="text-xs font-medium uppercase tracking-wider text-gray-300">Actions</span>
+                <span className="text-xs font-medium uppercase tracking-wider text-gray-300">
+                  Actions
+                </span>
               </th>
             </tr>
           </thead>
@@ -236,20 +287,27 @@ const ProgramTable: React.FC<ProgramTableProps> = ({ onViewProgram, onEditProgra
                 onClick={() => onViewProgram(program)}
               >
                 <td className="px-6 py-4">
-                  <div className="text-white font-medium group-hover:text-yellow-400 transition-colors">{program.name}</div>
+                  <div className="text-white font-medium group-hover:text-yellow-400 transition-colors">
+                    {program.name}
+                  </div>
                 </td>
                 <td className="px-6 py-4">
                   <div className="text-gray-300">{program.cohort}</div>
                 </td>
                 <td className="px-6 py-4">
-                  <div className="text-gray-300">{program.mentors}</div>
+                  <div className="text-gray-300">{program.mentors_count}</div>
                 </td>
                 <td className="px-6 py-4">
                   <div className="text-gray-300">{program.sessions}</div>
                 </td>
                 <td className="px-6 py-4">
-                  <span className={`inline-flex px-2 py-1 text-xs font-medium rounded-full ${getStatusColor(program.status)}`}>
-                    {program.status.charAt(0).toUpperCase() + program.status.slice(1)}
+                  <span
+                    className={`inline-flex px-2 py-1 text-xs font-medium rounded-full ${getStatusColor(
+                      program.status
+                    )}`}
+                  >
+                    {program.status.charAt(0).toUpperCase() +
+                      program.status.slice(1)}
                   </span>
                 </td>
                 <td className="px-6 py-4 text-right">
@@ -270,10 +328,9 @@ const ProgramTable: React.FC<ProgramTableProps> = ({ onViewProgram, onEditProgra
                       }}
                       className="p-1 text-gray-400 hover:text-yellow-500 transition-colors"
                     >
-                      
                       <Edit className="w-4 h-4" />
                     </button>
-                    <button 
+                    <button
                       onClick={(e) => e.stopPropagation()}
                       className="p-1 text-gray-400 hover:text-yellow-500 transition-colors"
                     >
