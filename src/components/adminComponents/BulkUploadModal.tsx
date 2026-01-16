@@ -1,6 +1,14 @@
-import React, { useState } from 'react';
-import { Upload, FileText, Users, AlertCircle, CheckCircle, Loader2, X } from 'lucide-react';
-import { useApi } from '../../services/api';
+import React, { useState } from "react";
+import {
+  Upload,
+  FileText,
+  Users,
+  AlertCircle,
+  CheckCircle,
+  Loader2,
+  X,
+} from "lucide-react";
+import { useApi } from "../../services/api";
 
 interface BulkUploadModalProps {
   isOpen: boolean;
@@ -8,11 +16,22 @@ interface BulkUploadModalProps {
   onUploadComplete?: () => void;
 }
 
-const BulkUploadModal: React.FC<BulkUploadModalProps> = ({ isOpen, onClose, onUploadComplete }) => {
+const BulkUploadModal: React.FC<BulkUploadModalProps> = ({
+  isOpen,
+  onClose,
+  onUploadComplete,
+}) => {
   const api = useApi();
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [selectedBatchId, setSelectedBatchId] = useState<number | null>(null);
-  const [batches, setBatches] = useState<Array<{id: number, batch_name: string, academic_year: string, semester: number}>>([]);
+  const [batches, setBatches] = useState<
+    Array<{
+      id: number;
+      batch_name: string;
+      academic_year: string;
+      semester: number;
+    }>
+  >([]);
   const [loading, setLoading] = useState(false);
   const [loadingBatches, setLoadingBatches] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -34,7 +53,7 @@ const BulkUploadModal: React.FC<BulkUploadModalProps> = ({ isOpen, onClose, onUp
         setBatches(response.batches);
       }
     } catch (error) {
-      setError('Failed to fetch batches');
+      setError("Failed to fetch batches");
     } finally {
       setLoadingBatches(false);
     }
@@ -43,12 +62,12 @@ const BulkUploadModal: React.FC<BulkUploadModalProps> = ({ isOpen, onClose, onUp
   const handleFileSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (file) {
-      if (file.type === 'text/csv' || file.name.endsWith('.csv')) {
+      if (file.type === "text/csv" || file.name.endsWith(".csv")) {
         setSelectedFile(file);
         setError(null);
         setSuccess(null);
       } else {
-        setError('Please select a CSV file');
+        setError("Please select a CSV file");
         setSelectedFile(null);
       }
     }
@@ -56,7 +75,7 @@ const BulkUploadModal: React.FC<BulkUploadModalProps> = ({ isOpen, onClose, onUp
 
   const handleUpload = async () => {
     if (!selectedFile) {
-      setError('Please select a file');
+      setError("Please select a file");
       return;
     }
 
@@ -68,28 +87,29 @@ const BulkUploadModal: React.FC<BulkUploadModalProps> = ({ isOpen, onClose, onUp
 
       // Simulate upload progress
       const progressInterval = setInterval(() => {
-        setUploadProgress(prev => Math.min(prev + 10, 90));
+        setUploadProgress((prev) => Math.min(prev + 10, 90));
       }, 200);
 
       const formData = new FormData();
-      formData.append('file', selectedFile);
-      
-      console.log('FormData created with file');
-      
+      formData.append("file", selectedFile);
+
+      console.log("FormData created with file");
+
       try {
         const result = await api.lms.adminStudents.bulkUploadStudents(formData);
-        
+
         clearInterval(progressInterval);
         setUploadProgress(100);
 
-        console.log('Upload response:', result);
+        console.log("Upload response:", result);
 
         // Check for success in the response
-        if (result.success || result.message?.includes('success')) {
-          const count = result.enrolledCount || result.count || 'students';
-          const batchInfo = result.message?.match(/batch ['"]([^'"]+)['"]/)?.[1] || '';
+        if (result.success || result.message?.includes("success")) {
+          const count = result.enrolledCount || result.count || "students";
+          const batchInfo =
+            result.message?.match(/batch ['"]([^'"]+)['"]/)?.[1] || "";
           setSuccess(
-            batchInfo 
+            batchInfo
               ? `Successfully enrolled ${count} student(s) in batch "${batchInfo}"`
               : `Successfully enrolled ${count} student(s)`
           );
@@ -99,33 +119,42 @@ const BulkUploadModal: React.FC<BulkUploadModalProps> = ({ isOpen, onClose, onUp
             setTimeout(() => onUploadComplete(), 1500);
           }
         } else {
-          setError(result.message || 'Upload failed. Please check the CSV format and try again.');
+          setError(
+            result.message ||
+              "Upload failed. Please check the CSV format and try again."
+          );
         }
       } catch (error: any) {
         clearInterval(progressInterval);
         setUploadProgress(0);
-        
-        console.error('Bulk upload error:', error);
-        
+
+        console.error("Bulk upload error:", error);
+
         // Parse error message from response
-        let errorMessage = 'Upload failed. ';
-        
+        let errorMessage = "Upload failed. ";
+
         if (error.response) {
           try {
             const errorData = await error.response.json();
-            console.error('Error response data:', errorData);
-            errorMessage += errorData.message || errorData.error || 'Please check your CSV format.';
+            console.error("Error response data:", errorData);
+            errorMessage +=
+              errorData.message ||
+              errorData.error ||
+              "Please check your CSV format.";
           } catch {
-            errorMessage += 'Server error (500). Please check your CSV format and batch name.';
+            errorMessage +=
+              "Server error (500). Please check your CSV format and batch name.";
           }
         } else {
-          errorMessage += error.message || 'Please check your CSV format and network connection.';
+          errorMessage +=
+            error.message ||
+            "Please check your CSV format and network connection.";
         }
-        
+
         setError(errorMessage);
       }
     } catch (error: any) {
-      setError(error.message || 'Upload failed');
+      setError(error.message || "Upload failed");
     } finally {
       setLoading(false);
       setTimeout(() => setUploadProgress(0), 500);
@@ -158,7 +187,6 @@ const BulkUploadModal: React.FC<BulkUploadModalProps> = ({ isOpen, onClose, onUp
             <X className="w-5 h-5" />
           </button>
         </div>
-
         <div className="space-y-4">
           {/* File Upload */}
           <div>
@@ -195,15 +223,19 @@ const BulkUploadModal: React.FC<BulkUploadModalProps> = ({ isOpen, onClose, onUp
 
           {/* CSV Format Info */}
           <div className="bg-gray-800 p-4 rounded-lg">
-            <h3 className="text-sm font-medium text-gray-300 mb-2">CSV Format Required:</h3>
+            <h3 className="text-sm font-medium text-gray-300 mb-2">
+              CSV Format Required:
+            </h3>
             <div className="text-xs text-gray-400 space-y-1">
               <p>• First row should contain headers: name, email, rollNumber</p>
               <p>• Each subsequent row should contain student data</p>
               <p>• Example:</p>
               <div className="bg-gray-700 p-2 rounded mt-2 font-mono text-xs">
-name,email,rollNumber<br/>
-                John Doe,john.doe@example.com,STU001<br/>
-Jane Smith,jane.smith@example.com,STU002
+                name,email,rollNumber
+                <br />
+                John Doe,john.doe@example.com,STU001
+                <br />
+                Jane Smith,jane.smith@example.com,STU002
               </div>
             </div>
           </div>

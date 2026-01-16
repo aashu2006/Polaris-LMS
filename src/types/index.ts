@@ -2,11 +2,14 @@ export interface Program {
   id: string;
   name: string;
   cohort: string;
-  mentors: number;
+  mentors: programMentor[];
   sessions: number;
   status: 'active' | 'inactive' | 'completed' | 'archived';
   startDate: string;
   endDate: string;
+  mentors_count: number;
+  originalProgramId: string;
+  batchId: string;
   assignedMentor?: {
     id: string;
     name: string;
@@ -16,8 +19,13 @@ export interface Program {
     availability: string;
     currentPrograms: number;
   } | null;
-}
 
+}
+export interface programMentor{
+  mentor_id: string;
+  mentor_name: string;
+  mentor_email: string;
+}
 export interface Batch {
   id: string;
   name: string;

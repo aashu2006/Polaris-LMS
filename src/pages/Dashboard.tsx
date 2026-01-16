@@ -38,7 +38,7 @@ const Dashboard: React.FC = () => {
   const [selectedBatch, setSelectedBatch] = useState<Batch | null>(null);
   const [showBatchModal, setShowBatchModal] = useState(false);
   const [batchRefreshTrigger, setBatchRefreshTrigger] = useState(0);
-  const [modalMode, setModalMode] = useState<'view' | 'edit'>('view');
+  const [modalMode, setModalMode] = useState<'view' | 'edit' | 'add'>('view');
   const [studentModalMode, setStudentModalMode] = useState<'view' | 'edit' | 'add'>('view');
   const [mentorModalMode, setMentorModalMode] = useState<'view' | 'edit' | 'add'>('view');
   const [showProgramModal, setShowProgramModal] = useState(false);
@@ -68,6 +68,7 @@ const Dashboard: React.FC = () => {
     setSelectedProgram(program);
     setModalMode('edit');
     setShowProgramModal(true);
+    
   };
 
   const handleCloseProgramModal = () => {
@@ -175,7 +176,7 @@ const Dashboard: React.FC = () => {
 
   const handleCreateProgram = () => {
     setSelectedProgram(null);
-    setModalMode('edit');
+    setModalMode('add');
     setShowProgramModal(true);
   };
 
