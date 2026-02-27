@@ -1020,6 +1020,22 @@ const lmsApi = {
         headers: { 'Content-Type': 'application/json' },
       }, token);
     },
+
+    addSwapMentor: async (mentorIds: Array<any>, programId: string,batchId: string, fromMentorId: string, toMentorId: string, mentorActionMode:string,token: string) => {
+      if(mentorActionMode==="swap"){
+        return lmsApiRequest(`${LMS_BASE_URL}/api/v1/admin/batch/batches/${batchId}/change-mentor`, {
+          method: 'PUT',
+          body: JSON.stringify({  programId, fromMentorId, toMentorId }),
+          headers: { 'Content-Type': 'application/json' },
+        }, token);
+      }else{
+        return lmsApiRequest(`${LMS_BASE_URL}/api/v1/admin/batch/batches/${batchId}/add-mentor`, {
+          method: 'POST',
+          body: JSON.stringify({  programId, mentorIds ,updateFutureSessions:true}),
+          headers: { 'Content-Type': 'application/json' },
+        }, token);
+      }
+    },
   },
 
   // Admin Groups endpoints
@@ -1132,6 +1148,41 @@ const lmsApi = {
     },
   },
 
+};
+// admin analytics endpoints
+const adminAnalytics = {
+  getMentorAnalytics: async (
+    token: string,
+    start_date?: string,
+    end_date?: string,
+    page?: number,  
+    limit?: number
+  ) => {
+    const query =
+      start_date && end_date
+        ? `?start_date=${start_date}&end_date=${end_date}`
+        : `?page=${page || 1}&limit=${limit || 10}`;
+    return lmsApiRequest(
+      `${LMS_BASE_URL}/api/v1/admin/mentorStats/total-lectures${query}`,
+      {
+        method: "GET",
+      },
+      token
+    );
+  },
+  getSelectedMentorAnalytics: async (
+    token: string,
+    mentor_id: string,
+    start_date:string,
+    end_date:string)=>{
+      return lmsApiRequest(
+        `${LMS_BASE_URL}/api/v1/admin/mentorStats/${mentor_id}/lectures?start_date=${start_date}&end_date=${end_date}`,
+        {
+          method: "GET",
+        },
+        token
+      );
+    }
 };
 
 // Multimedia API functions
@@ -1587,6 +1638,7 @@ export const useApi = () => {
         createProgram: (programData: any) => lmsApi.adminPrograms.createProgram(programData, token),
         getAllFaculties: () => lmsApi.adminPrograms.getAllFaculties(token),
         editProgram: (programId: string, programData: any) => lmsApi.adminPrograms.editProgram(programId, programData, token),
+        addSwapMentor:(mentorIds:Array<any>,programId:string,batchId:string,fromMentorId:string,toMentorId:string,mentorActionMode:string) => lmsApi.adminPrograms.addSwapMentor(mentorIds,programId,batchId,fromMentorId,toMentorId,mentorActionMode,token),      
       },
       adminGroups: {
         getGroupStats: () => lmsApi.adminGroups.getGroupStats(token),
@@ -1655,6 +1707,13 @@ export const useApi = () => {
       getSummaryStats: () => dashboardApi.getSummaryStats(token),
       getRecentActivities: () => dashboardApi.getRecentActivities(token),
     },
+    adminAnalytics: {
+      mentorsAnalytics: (start_date?: string, end_date?: string, page?: number, limit?: number) =>
+        adminAnalytics.getMentorAnalytics(token, start_date, end_date, page, limit),
+      lecturesAnalytics: (mentor_id: string, start_date:string, end_date:string) =>
+        adminAnalytics.getSelectedMentorAnalytics(token, mentor_id, start_date, end_date),
+    },
+
   }), [token, refreshToken]);
 
   return apiFunctions;

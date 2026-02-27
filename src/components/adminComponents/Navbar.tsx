@@ -11,12 +11,12 @@ const Navbar: React.FC<NavbarProps> = ({ notifications, onNotificationClick }) =
   const [showProfileMenu, setShowProfileMenu] = useState(false);
   const { user, logout } = useAuth();
 
-  const navItems = [
-    { name: 'Programs', active: true },
-    { name: 'Mentors', active: false },
-    { name: 'Students', active: false },
-    { name: 'Reports', active: false },
-  ];
+  // const navItems = [
+  //   { name: 'Programs', active: true },
+  //   { name: 'Mentors', active: false },
+  //   { name: 'Students', active: false },
+  //   { name: 'Reports', active: false },
+  // ];
 
   return (
     <nav className="sticky top-0 z-50 bg-black/95 backdrop-blur-md border-b border-gray-800/50 px-6 py-4">
@@ -28,30 +28,12 @@ const Navbar: React.FC<NavbarProps> = ({ notifications, onNotificationClick }) =
               <span className="text-black font-bold text-xl">P</span>
             </div>
             <div>
-              <span className="text-white font-bold text-xl">Plarislabs</span>
+              <span className="text-white font-bold text-xl">Polarislabs</span>
               <span className="font-semibold text-sm ml-1" style={{ color: '#ffc540' }}>2.0</span>
             </div>
           </div>
-
-          <div className="hidden md:flex items-center space-x-6">
-            {navItems.map((item) => (
-              <button
-                key={item.name}
-                className={`px-4 py-2 rounded-xl text-sm font-semibold transition-all duration-200 ${
-                  item.active
-                    ? 'text-black bg-yellow-500 shadow-lg shadow-yellow-500/25'
-                    : 'text-gray-300 hover:text-white hover:bg-gray-800/50'
-                }`}
-              >
-                {item.name}
-              </button>
-            ))}
-          </div>
         </div>
-
-        {/* Search and Actions */}
         <div className="flex items-center space-x-4">
-          {/* Search */}
           <div className="hidden lg:flex relative">
             <Search className="absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
             <input
@@ -60,24 +42,6 @@ const Navbar: React.FC<NavbarProps> = ({ notifications, onNotificationClick }) =
               className="input-field pl-12 pr-4 py-3 w-72 placeholder-gray-500"
             />
           </div>
-
-          {/* Notifications */}
-          <button
-            onClick={onNotificationClick}
-            className="relative p-3 text-gray-400 transition-all duration-200 hover:bg-gray-800/50 rounded-xl"
-            style={{ '--hover-color': '#ffc540' }}
-            onMouseEnter={(e) => e.currentTarget.style.color = '#ffc540'}
-            onMouseLeave={(e) => e.currentTarget.style.color = ''}
-          >
-            <Bell className="w-6 h-6" />
-            {notifications > 0 && (
-              <span className="absolute -top-1 -right-1 bg-gradient-to-r from-yellow-400 to-yellow-600 text-black text-xs rounded-full w-6 h-6 flex items-center justify-center font-bold shadow-lg">
-                {notifications > 9 ? '9+' : notifications}
-              </span>
-            )}
-          </button>
-
-          {/* Profile Menu */}
           <div className="relative">
             <button
               onClick={() => setShowProfileMenu(!showProfileMenu)}
